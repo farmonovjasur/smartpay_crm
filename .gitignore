@@ -1,6 +1,4 @@
 # ─── Root .gitignore ───
-# Faqat backend/ va frontend/ papkalar GitHub'ga yuklansa bas.
-# Boshqa papkalar (design, example exels, .kiro, .vscode) yuklanmasin.
 
 # IDE / Editor
 .vscode/
@@ -10,11 +8,10 @@
 .DS_Store
 Thumbs.db
 
-# Kiro workspace (shaxsiy konfiguratsiya)
+# Kiro workspace
 .kiro/
 
-# Design hujjatlari (repo'ga kerak emas)
+# Design 
 design/
 
-# Namuna fayllar
 exmaple exels/
