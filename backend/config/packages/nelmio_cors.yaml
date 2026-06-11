@@ -1,0 +1,15 @@
+nelmio_cors:
+    defaults:
+        allow_credentials: true
+        allow_origin: ['%env(CORS_ALLOWED_ORIGIN)%']
+        allow_headers: ['Content-Type', 'X-CSRF-Token', 'X-Requested-With']
+        allow_methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+        expose_headers: ['Link']
+        max_age: 3600
+    paths:
+        '^/api/':
+            allow_origin: ['%env(CORS_ALLOWED_ORIGIN)%']
+            allow_credentials: true
+            allow_headers: ['Content-Type', 'X-CSRF-Token', 'X-Requested-With']
+            allow_methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+            max_age: 3600

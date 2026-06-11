@@ -1,0 +1,39 @@
+# see https://symfony.com/doc/current/reference/configuration/framework.html
+framework:
+    secret: '%env(APP_SECRET)%'
+    default_locale: uz
+    # Server-wide timezone. All `\DateTimeImmutable('today')` calls in cron handlers
+    # rely on this being Asia/Tashkent (see DailyDebtCheckHandler).
+    # Symfony does not expose a `timezone` framework option directly; we set it
+    # via PHP's `date.timezone` ini in services.yaml and reference this env var
+    # so prod/test/dev stay consistent.
+    http_method_override: false
+    handle_all_throwables: true
+
+    # Note: PHP default timezone is also enforced in `public/index.php` and
+    # `bin/console` via `date_default_timezone_set('%env(APP_TIMEZONE)%')`.
+
+    # ESI / fragments not used.
+    esi: false
+    fragments: false
+
+    php_errors:
+        log: true
+
+    session:
+        # Session is NOT used for auth (JWT cookies handle auth).
+        # Kept enabled for flash messages on legacy pages, but cookies are SameSite=Strict.
+        handler_id: null
+        cookie_secure: auto
+        cookie_samesite: lax
+        storage_factory_id: session.storage.factory.native
+
+    # Upload size for Excel import: 5MB hard limit per Requirements 6.x.
+    # The actual ceiling is enforced by ClientImporter; we set a slightly
+    # higher PHP/web-server limit to surface a clean 413 response.
+
+when@test:
+    framework:
+        test: true
+        session:
+            storage_factory_id: session.storage.factory.mock_file

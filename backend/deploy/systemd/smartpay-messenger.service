@@ -1,0 +1,16 @@
+[Unit]
+Description=SmartPay Messenger Worker
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/smartpay/backend
+ExecStart=/usr/bin/php bin/console messenger:consume scheduler_default async --time-limit=3600 --memory-limit=256M
+Restart=always
+RestartSec=5
+Environment=APP_ENV=prod
+
+[Install]
+WantedBy=multi-user.target

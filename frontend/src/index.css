@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-light: #F8FAFC;
+    --card-bg: #FFFFFF;
+    --text-primary: #0F172A;
+    --text-secondary: #64748B;
+    --border: #E2E8F0;
+    --border-dark: #334155;
+    --radius-btn: 8px;
+    --radius-card: 12px;
+    --sidebar-bg: #1E293B;
+    --sidebar-text: #CBD5E1;
+    --navbar-bg: #FFFFFF;
+    --input-bg: #FFFFFF;
+    --hover-bg: #F1F5F9;
+    --badge-border: #FFFFFF;
+  }
+
+  .dark {
+    --bg-light: #0F172A;
+    --card-bg: #1E293B;
+    --text-primary: #F1F5F9;
+    --text-secondary: #94A3B8;
+    --border: #334155;
+    --border-dark: #475569;
+    --sidebar-bg: #0F172A;
+    --sidebar-text: #CBD5E1;
+    --navbar-bg: #1E293B;
+    --input-bg: #1E293B;
+    --hover-bg: #334155;
+    --badge-border: #1E293B;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: var(--bg-light);
+    color: var(--text-primary);
+  }
+}

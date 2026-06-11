@@ -1,0 +1,9 @@
+security:
+    firewalls:
+        api:
+            pattern: ^/api
+            stateless: false
+            lazy: true
+            provider: app_user_provider
+            custom_authenticators:
+                - App\Security\JwtCookieAuthenticator
