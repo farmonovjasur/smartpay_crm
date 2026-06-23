@@ -1,0 +1,8 @@
+
+IPv4:	91.98.237.187/32
+
+IPv6:	2a01:4f8:c0c:b842::/64
+
+User:	root
+
+Password: Jasurbek6091!
