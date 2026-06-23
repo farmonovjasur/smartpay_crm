@@ -6,3 +6,5 @@ IPv6:	2a01:4f8:c0c:b842::/64
 User:	root
 
 Password: Jasurbek6091!
+
+Database paroli: iiJ2XEY93NYSsBkGz3zy
