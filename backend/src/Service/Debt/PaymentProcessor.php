@@ -89,6 +89,14 @@ final class PaymentProcessor
                 $cms->setPaidAt(new \DateTimeImmutable());
             }
 
+            // Update client's last_paid_period to reflect the debt payment
+            $client = $debt->getClient();
+            $debtLastPeriod = $debt->getLastOverduePeriod();
+            if ($client->getLastPaidPeriod() === null || strcmp($debtLastPeriod, $client->getLastPaidPeriod()) > 0) {
+                $client->setLastPaidPeriod($debtLastPeriod);
+                $client->setUpdatedAt(new \DateTimeImmutable());
+            }
+
             $this->em->flush();
             $conn->commit();
 

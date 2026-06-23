@@ -62,6 +62,12 @@ final class MonthlyPaymentService
         $cms->setPaymentTypeSnapshot($client->getPaymentType());
         $cms->setPaidAt(new \DateTimeImmutable());
 
+        // Update client's last_paid_period if this payment is for a later period
+        if ($client->getLastPaidPeriod() === null || strcmp($period, $client->getLastPaidPeriod()) > 0) {
+            $client->setLastPaidPeriod($period);
+            $client->setUpdatedAt(new \DateTimeImmutable());
+        }
+
         // Create payment record
         $payment = new Payment();
         $payment->setClient($client);

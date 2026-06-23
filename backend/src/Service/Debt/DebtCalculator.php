@@ -9,13 +9,14 @@ use App\Entity\Client;
 use App\Entity\ClientMonthlyStatus;
 use App\Entity\Debt;
 use App\Entity\User;
+use App\Enum\ClientStatus;
 use App\Enum\DebtStatus;
 use App\Enum\NotificationType;
 use App\Enum\PaymentStatus;
 use App\Repository\ClientRepository;
 use App\Service\Config\ConfigService;
 use App\Service\Notification\NotificationService;
-use App\Service\Util\EffectiveDayCalculator;
+use App\Service\Util\PeriodRangeIterator;
 use Doctrine\ORM\EntityManagerInterface;
 
 final class DebtCalculator
@@ -32,54 +33,74 @@ final class DebtCalculator
     {
         $report = new DetectionReport();
 
-        // Get clients whose anniversary day is today
-        $clients = $this->clientRepository->findActiveClientsWithAnniversaryDay($today);
-
-        // Determine previous period
-        $prevPeriod = $today->modify('-1 month')->format('Y-m');
+        $currentPeriod = $today->format('Y-m');
         $unitPrice = $this->configService->get('unit_price');
 
+        // Find ALL active clients whose lastPaidPeriod < currentPeriod (i.e. they haven't paid this month yet)
+        $clients = $this->clientRepository->createQueryBuilder('c')
+            ->andWhere('c.status = :status')
+            ->andWhere('c.lastPaidPeriod IS NOT NULL')
+            ->andWhere('c.lastPaidPeriod < :currentPeriod')
+            ->setParameter('status', ClientStatus::Faol)
+            ->setParameter('currentPeriod', $currentPeriod)
+            ->getQuery()
+            ->getResult();
+
+        $cmsRepo = $this->em->getRepository(ClientMonthlyStatus::class);
+        $debtRepo = $this->em->getRepository(Debt::class);
+
         foreach ($clients as $client) {
-            $effectiveDay = EffectiveDayCalculator::compute($today, $client->getServiceDate());
-            if ((int) $today->format('d') !== $effectiveDay) {
+            /** @var Client $client */
+            $report->processedClientsCount++;
+
+            $lastPaid = $client->getLastPaidPeriod();
+            $firstOverdue = (\DateTimeImmutable::createFromFormat('Y-m-d', $lastPaid . '-01'))
+                ->modify('+1 month')
+                ->format('Y-m');
+
+            // Count unpaid months from firstOverdue to currentPeriod
+            $monthsOverdue = 0;
+            foreach (PeriodRangeIterator::between($firstOverdue, $currentPeriod) as $period) {
+                $cms = $cmsRepo->findOneBy(['client' => $client, 'period' => $period]);
+
+                if ($cms !== null && $cms->getPaymentStatus() === PaymentStatus::Paid) {
+                    continue; // This month was paid individually, skip
+                }
+
+                // Mark CMS as unpaid
+                if ($cms === null) {
+                    $cms = new ClientMonthlyStatus();
+                    $cms->setClient($client);
+                    $cms->setPeriod($period);
+                    $cms->setPaymentTypeSnapshot($client->getPaymentType());
+                    $this->em->persist($cms);
+                }
+                $cms->setPaymentStatus(PaymentStatus::Unpaid);
+                $monthsOverdue++;
+            }
+
+            if ($monthsOverdue === 0) {
                 continue;
             }
 
-            $report->processedClientsCount++;
-
-            // Check if prev period was paid
-            $cms = $this->em->getRepository(ClientMonthlyStatus::class)->findOneBy([
-                'client' => $client,
-                'period' => $prevPeriod,
-            ]);
-
-            if ($cms !== null && $cms->getPaymentStatus() === PaymentStatus::Paid) {
-                continue; // Already paid, skip
-            }
-
-            // Mark CMS as unpaid
-            if ($cms === null) {
-                $cms = new ClientMonthlyStatus();
-                $cms->setClient($client);
-                $cms->setPeriod($prevPeriod);
-                $cms->setPaymentTypeSnapshot($client->getPaymentType());
-                $this->em->persist($cms);
-            }
-            $cms->setPaymentStatus(PaymentStatus::Unpaid);
+            $monthlyAmount = bcmul($unitPrice, (string) $client->getProductCount(), 2);
+            $totalAmount = bcmul($monthlyAmount, (string) $monthsOverdue, 2);
 
             // Check for existing active debt
-            $existingDebt = $this->em->getRepository(Debt::class)->findOneBy([
+            $existingDebt = $debtRepo->findOneBy([
                 'client' => $client,
                 'status' => DebtStatus::Active,
             ]);
 
-            $monthlyAmount = bcmul($unitPrice, (string) $client->getProductCount(), 2);
-
             if ($existingDebt !== null) {
-                // Increment
-                $existingDebt->setMonthsOverdue($existingDebt->getMonthsOverdue() + 1);
-                $existingDebt->setLastOverduePeriod($prevPeriod);
-                $existingDebt->setAmount(bcmul($monthlyAmount, (string) $existingDebt->getMonthsOverdue(), 2));
+                // Update existing debt with current overdue info
+                $existingDebt->setMonthlyAmount($monthlyAmount);
+                $existingDebt->setMonthsOverdue($monthsOverdue);
+                $existingDebt->setAmount($totalAmount);
+                $existingDebt->setFirstOverduePeriod($firstOverdue);
+                $existingDebt->setLastOverduePeriod($currentPeriod);
+                $existingDebt->setPaymentTypeSnapshot($client->getPaymentType());
+                $existingDebt->setDueDate($today);
                 $existingDebt->setUpdatedAt(new \DateTimeImmutable());
                 $report->incrementedCount++;
             } else {
@@ -87,10 +108,10 @@ final class DebtCalculator
                 $debt = new Debt();
                 $debt->setClient($client);
                 $debt->setMonthlyAmount($monthlyAmount);
-                $debt->setAmount($monthlyAmount);
-                $debt->setMonthsOverdue(1);
-                $debt->setFirstOverduePeriod($prevPeriod);
-                $debt->setLastOverduePeriod($prevPeriod);
+                $debt->setMonthsOverdue($monthsOverdue);
+                $debt->setAmount($totalAmount);
+                $debt->setFirstOverduePeriod($firstOverdue);
+                $debt->setLastOverduePeriod($currentPeriod);
                 $debt->setPaymentTypeSnapshot($client->getPaymentType());
                 $debt->setDueDate($today);
                 $this->em->persist($debt);
