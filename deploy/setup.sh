@@ -410,7 +410,7 @@ echo "Backup completed: $DATE"
 BACKUP_SCRIPT
 
 chmod +x /usr/local/bin/smartpay-backup.sh
-(crontab -l 2>/dev/null | grep -v smartpay-backup; echo "0 2 * * * /usr/local/bin/smartpay-backup.sh >> /var/log/smartpay-backup.log 2>&1") | crontab -
+(crontab -l 2>/dev/null | grep -v smartpay-backup || true; echo "0 2 * * * /usr/local/bin/smartpay-backup.sh >> /var/log/smartpay-backup.log 2>&1") | crontab -
 log_success "Backup tizimi sozlandi (har kuni soat 2:00 da)"
 
 ###############################################################################
