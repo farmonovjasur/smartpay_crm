@@ -69,7 +69,7 @@ log_info "Backend'ni yangilash..."
 cd /var/www/smartpay/backend
 
 # Dependencies
-composer install --no-dev --optimize-autoloader --no-interaction
+COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction
 
 # Migrations
 php bin/console doctrine:migrations:migrate --no-interaction

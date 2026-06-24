@@ -11,7 +11,12 @@ Thumbs.db
 # Kiro workspace
 .kiro/
 
-# Design 
+# Design files
 design/
 
+# Example files
 exmaple exels/
+
+# Credentials — NEVER commit passwords or secrets
+vps.txt
+*.credentials
