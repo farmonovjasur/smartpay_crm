@@ -278,7 +278,7 @@ VITE_APP_NAME=SmartPay CRM
 FRONTEND_ENV
 
 # npm install va build
-npm ci
+npm install --include=dev
 npm run build
 
 if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
