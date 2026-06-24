@@ -115,21 +115,32 @@ log_success "PHP 8.2 o'rnatildi"
 ###############################################################################
 log_info "MySQL 8.0 o'rnatish..."
 
-# mysql_secure_installation interaktiv — shuning uchun qo'lda sozlaymiz
 apt install -y mysql-server
 
 # MySQL ishlayotganligini tekshirish
 systemctl start mysql
 systemctl enable mysql
 
-# MySQL root autentifikatsiyani auth_socket dan mysql_native_password ga o'tkazish
-# (Ubuntu 22.04 da MySQL root odatda auth_socket bilan ishlaydi)
-DB_ROOT_PASSWORD=$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-20)
+# Root auth_socket da qoladi (Ubuntu default) — bu xavfsizroq:
+# faqat Linux root useri mysql root sifatida ulanishi mumkin.
+# Agar avvalgi run root ni password ga o'zgartirgan bo'lsa, qaytaramiz:
+if ! mysql -u root -e "SELECT 1" &>/dev/null; then
+    log_warning "MySQL root auth_socket da emas, tiklaymiz..."
+    systemctl stop mysql
+    mysqld_safe --skip-grant-tables --skip-networking &
+    sleep 3
+    mysql -u root <<RESET_ROOT
+FLUSH PRIVILEGES;
+ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket;
+FLUSH PRIVILEGES;
+RESET_ROOT
+    killall mysqld 2>/dev/null || true
+    sleep 3
+    systemctl start mysql
+fi
 
+# Xavfsizlikni sozlash (root auth_socket orqali)
 mysql -u root <<MYSQL_SECURE
--- Root parolini o'rnatish
-ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$DB_ROOT_PASSWORD';
-
 -- Anonim foydalanuvchilarni o'chirish
 DELETE FROM mysql.user WHERE User='';
 
@@ -189,9 +200,17 @@ log_info "Database yaratish..."
 
 DB_PASSWORD=$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-20)
 
-mysql -u root -p"$DB_ROOT_PASSWORD" <<MYSQL_DB
-CREATE DATABASE IF NOT EXISTS smartpay_crm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'smartpay'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+# Eski database va user ni tozalash (qayta ishga tushirish uchun)
+mysql -u root <<MYSQL_CLEANUP
+DROP DATABASE IF EXISTS smartpay_crm;
+DROP USER IF EXISTS 'smartpay'@'localhost';
+FLUSH PRIVILEGES;
+MYSQL_CLEANUP
+
+# Yangi database va user yaratish (auth_socket orqali, parolsiz)
+mysql -u root <<MYSQL_DB
+CREATE DATABASE smartpay_crm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'smartpay'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
 GRANT ALL PRIVILEGES ON smartpay_crm.* TO 'smartpay'@'localhost';
 FLUSH PRIVILEGES;
 MYSQL_DB
@@ -452,8 +471,8 @@ log_success "Monitoring skripti yaratildi"
 cat > "$CREDENTIALS_FILE" <<CREDS
 # SmartPay CRM Credentials — $(date +%Y-%m-%d)
 # BU FAYLNI XAVFSIZ SAQLANG!
+# MySQL root: auth_socket (parolsiz, faqat Linux root useridan)
 
-MYSQL_ROOT_PASSWORD=$DB_ROOT_PASSWORD
 DB_PASSWORD=$DB_PASSWORD
 APP_SECRET=$APP_SECRET
 JWT_PASSPHRASE=$JWT_PASSPHRASE
