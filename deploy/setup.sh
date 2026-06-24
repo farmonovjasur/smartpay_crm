@@ -23,6 +23,9 @@ log_success() { echo -e "${GREEN}[✓]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[!]${NC} $1"; }
 log_error()   { echo -e "${RED}[✗]${NC} $1"; }
 
+# Composer'ga root orqali ishlashga doimiy ruxsat berish (interaktiv so'rovlarni oldini olish)
+export COMPOSER_ALLOW_SUPERUSER=1
+
 # ─── Banner ───
 echo -e "${GREEN}"
 cat << "EOF"
