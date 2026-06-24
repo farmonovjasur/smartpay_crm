@@ -16,8 +16,8 @@ final class CookieFactory
         return Cookie::create('access_token')
             ->withValue($jwt)
             ->withHttpOnly(true)
-            ->withSecure(true)
-            ->withSameSite('none')
+            ->withSecure(false)
+            ->withSameSite('lax')
             ->withPath('/api')
             ->withExpires(time() + $ttl);
     }
@@ -30,8 +30,8 @@ final class CookieFactory
         return Cookie::create('refresh_token')
             ->withValue($token)
             ->withHttpOnly(true)
-            ->withSecure(true)
-            ->withSameSite('none')
+            ->withSecure(false)
+            ->withSameSite('lax')
             ->withPath('/api/auth')
             ->withExpires(time() + $ttl);
     }
@@ -44,7 +44,7 @@ final class CookieFactory
         return Cookie::create('csrf_token')
             ->withValue($token)
             ->withHttpOnly(false)
-            ->withSecure(true)
+            ->withSecure(false)
             ->withSameSite('strict')
             ->withPath('/')
             ->withExpires(time() + $ttl);
@@ -60,8 +60,8 @@ final class CookieFactory
             ->withExpires(1)
             ->withPath($this->pathForName($name))
             ->withHttpOnly($name !== 'csrf_token')
-            ->withSecure(true)
-            ->withSameSite($name === 'csrf_token' ? 'strict' : 'none');
+            ->withSecure(false)
+            ->withSameSite($name === 'csrf_token' ? 'strict' : 'lax');
     }
 
     private function pathForName(string $name): string
