@@ -246,7 +246,8 @@ ENV_FILE
 
 # JWT keys yaratish
 mkdir -p config/jwt
-php bin/console lexik:jwt:generate-keypair --skip-if-exists
+rm -f config/jwt/*.pem
+php bin/console lexik:jwt:generate-keypair
 
 # Database migratsiyalari
 php bin/console doctrine:migrations:migrate --no-interaction
