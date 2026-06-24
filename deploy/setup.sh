@@ -226,8 +226,8 @@ log_success "Database yaratildi"
 log_info "Backend'ni sozlash..."
 cd "$APP_DIR/backend"
 
-# Composer install
-COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction
+# Composer install (APP_ENV=prod bilan, aks holda dev bundle larni qidirib xato beradi)
+APP_ENV=prod COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction
 
 # .env.local yaratish
 APP_SECRET=$(openssl rand -hex 16)
