@@ -54,6 +54,27 @@ CREDENTIALS_FILE="/root/.smartpay_credentials"
 log_info "SmartPay CRM deploy boshlanmoqda... (Server: $SERVER_IP)"
 
 ###############################################################################
+# ⚠️  OGOHLANTIRISH — MUHIM!
+###############################################################################
+echo ""
+echo -e "${RED}╔══════════════════════════════════════════════════╗${NC}"
+echo -e "${RED}║   ⚠️  DIQQAT! BU SKRIPT BARCHA MA'LUMOTLARNI   ║${NC}"
+echo -e "${RED}║   O'CHIRADI VA SERVERNI NOLDAN SOZLAYDI!        ║${NC}"
+echo -e "${RED}║                                                  ║${NC}"
+echo -e "${RED}║   Yangi funksiya qo'shish uchun:                 ║${NC}"
+echo -e "${RED}║   → /root/update.sh dan foydalaning!             ║${NC}"
+echo -e "${RED}╚══════════════════════════════════════════════════╝${NC}"
+echo ""
+read -r -p "Davom etmoqchimisiz? MySQL bazasidagi BARCHA ma'lumotlar o'chadi! (ha/yo'q): " CONFIRM
+if [ "$CONFIRM" != "ha" ]; then
+    echo ""
+    log_info "To'g'ri qaror! Yangilanish uchun: ./update.sh"
+    echo ""
+    exit 0
+fi
+echo ""
+
+###############################################################################
 # 1. Eski o'rnatishni tozalash
 ###############################################################################
 log_info "Eski o'rnatishni tozalash..."

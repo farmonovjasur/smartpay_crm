@@ -90,7 +90,7 @@ log_info "Frontend'ni yangilash..."
 cd /var/www/smartpay/frontend
 
 # Dependencies
-npm ci
+NODE_ENV=development npm install
 
 # Build
 npm run build
