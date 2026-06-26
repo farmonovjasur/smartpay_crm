@@ -201,17 +201,15 @@ export function ClientForm({ open, onOpenChange, client }) {
               />
             </div>
 
-            {isEdit && (
-              <Field label="Holat">
-                <select
-                  {...register('status')}
-                  className="h-9 w-full rounded-btn border border-[var(--border)] bg-[var(--card-bg)] px-3 text-sm outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="faol">Faol</option>
-                  <option value="nofaol">Nofaol</option>
-                </select>
-              </Field>
-            )}
+            <Field label="Holat">
+              <select
+                {...register('status')}
+                className="h-9 w-full rounded-btn border border-[var(--border)] bg-[var(--card-bg)] px-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="faol">Faol</option>
+                <option value="nofaol">Nofaol</option>
+              </select>
+            </Field>
 
             {errors.root && <p className="text-xs text-danger">{errors.root.message}</p>}
           </div>

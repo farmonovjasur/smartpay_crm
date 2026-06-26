@@ -38,6 +38,9 @@ final class ClientCreateInput
     #[Assert\Positive]
     public int $productCount = 1;
 
+    #[Assert\Choice(choices: ['faol', 'nofaol'])]
+    public string $status = 'faol';
+
     public ?string $notes = null;
 
     /**

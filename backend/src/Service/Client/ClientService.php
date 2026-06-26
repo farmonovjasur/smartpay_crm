@@ -50,6 +50,7 @@ final class ClientService
         $client->setServiceDate(new \DateTimeImmutable($in->serviceDate));
         $client->setPaymentType(PaymentType::from($in->paymentType));
         $client->setProductCount($in->productCount);
+        $client->setStatus(ClientStatus::from($in->status));
         $client->setNotes($in->notes);
 
         $lastPaidPeriod = trim($in->lastPaidPeriod);

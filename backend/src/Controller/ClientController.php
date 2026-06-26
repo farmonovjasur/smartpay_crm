@@ -141,6 +141,7 @@ final class ClientController extends AbstractController
         $input->serviceDate = $data['service_date'] ?? '';
         $input->paymentType = $data['payment_type'] ?? '';
         $input->productCount = (int) ($data['product_count'] ?? 1);
+        $input->status = $data['status'] ?? 'faol';
         $input->notes = $data['notes'] ?? null;
         $input->lastPaidPeriod = (string) ($data['last_paid_period'] ?? '');
 
