@@ -85,6 +85,9 @@ final class ClientService
         $newServiceDate = new \DateTimeImmutable($in->serviceDate);
         $oldServiceDate = $client->getServiceDate();
         $serviceDateChanged = $newServiceDate->format('Y-m-d') !== $oldServiceDate->format('Y-m-d');
+        
+        $productCountChanged = $client->getProductCount() !== $in->productCount;
+        $paymentTypeChanged = $client->getPaymentType()->value !== $in->paymentType;
 
         $client->setInn($in->inn);
         $client->setName($in->name);
@@ -101,7 +104,7 @@ final class ClientService
         $newLastPaid = trim($in->lastPaidPeriod);
         $seededCount = 0;
 
-        $needsReconcile = $newLastPaid !== $oldLastPaid || $serviceDateChanged;
+        $needsReconcile = $newLastPaid !== $oldLastPaid || $serviceDateChanged || $productCountChanged || $paymentTypeChanged;
 
         if ($needsReconcile) {
             $this->validateLastPaidPeriod($client->getServiceDate(), $newLastPaid);
@@ -174,6 +177,22 @@ final class ClientService
     public function findById(int $id): Client
     {
         return $this->findOrFail($id);
+    }
+
+    /**
+     * Excel import paytida chaqiriladi: to'lov tarixini seed qiladi va
+     * qarzdorlikni qo'lda qo'shishdagi kabi hisoblaydi.
+     */
+    public function seedAndReconcileForImport(Client $client, string $lastPaidPeriod, User $actor): void
+    {
+        if ($lastPaidPeriod !== '') {
+            $this->seedPaidHistory($client, $lastPaidPeriod);
+            $this->reconcileOverdueAfterSeeding($client, $lastPaidPeriod, $actor);
+        } else {
+            // last_paid_period yo'q bo'lsa: joriy oydan oldingi barcha oylar qarzdor
+            $lastPaidPeriod = '';
+            $this->reconcileOverdueAfterSeeding($client, $lastPaidPeriod, $actor);
+        }
     }
 
     /**

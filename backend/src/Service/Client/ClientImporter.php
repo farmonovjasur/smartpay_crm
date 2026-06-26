@@ -30,6 +30,7 @@ final class ClientImporter
         private readonly ImportRowParser $rowParser,
         private readonly AuditLogger $auditLogger,
         private readonly NotificationService $notificationService,
+        private readonly ClientService $clientService,
     ) {
     }
 
@@ -106,10 +107,16 @@ final class ClientImporter
                 $client->setPaymentType(PaymentType::from($parsed['data']['payment_type']));
                 $client->setProductCount($parsed['data']['product_count']);
                 $client->setStatus(ClientStatus::Faol);
-                if ($parsed['data']['last_paid_period'] !== null) {
-                    $client->setLastPaidPeriod($parsed['data']['last_paid_period']);
-                }
+
+                $lastPaidPeriod = $parsed['data']['last_paid_period'] ?? '';
+                $client->setLastPaidPeriod($lastPaidPeriod);
+
                 $this->em->persist($client);
+                $this->em->flush();
+
+                // Qo'lda qo'shish kabi: to'lov tarixini seed qilish va
+                // qarzdorlikni hisoblash (seedPaidHistory + reconcileOverdueAfterSeeding)
+                $this->clientService->seedAndReconcileForImport($client, $lastPaidPeriod, $actor);
             }
 
             $result->importedCount++;
