@@ -66,7 +66,18 @@ export function ClientForm({ open, onOpenChange, client }) {
           last_paid_period: periodToFullDate(client.last_paid_period),
         });
       } else {
-        reset({ payment_type: 'fakt', status: 'faol', product_count: 1, last_paid_period: '', phone2: '' });
+        reset({
+          inn: '',
+          name: '',
+          phone: '',
+          phone2: '',
+          service_date: '',
+          payment_type: 'fakt',
+          status: 'faol',
+          product_count: 1,
+          last_paid_period: '',
+          notes: ''
+        });
       }
     }
   }, [open, client, reset]);
