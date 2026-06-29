@@ -21,7 +21,7 @@ final class DebtExporter
     ) {
     }
 
-    public function exportFiltered(string $status): StreamedResponse
+    public function exportFiltered(string $status, string $search = ''): StreamedResponse
     {
         $qb = $this->em->createQueryBuilder()
             ->select('d')
@@ -32,6 +32,11 @@ final class DebtExporter
         if ($status !== 'all') {
             $qb->andWhere('d.status = :status')
                 ->setParameter('status', $status);
+        }
+
+        if ($search !== '') {
+            $qb->andWhere('c.name LIKE :search OR c.inn LIKE :search OR c.phone LIKE :search')
+                ->setParameter('search', '%' . $search . '%');
         }
 
         $debts = $qb->getQuery()->getResult();

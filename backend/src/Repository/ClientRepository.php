@@ -45,7 +45,7 @@ class ClientRepository extends ServiceEntityRepository
               AND c.deleted_at IS NULL
               AND NOT EXISTS (
                 SELECT 1 FROM client_monthly_status cms
-                WHERE cms.client_id = c.id AND cms.period = :period AND cms.payment_status = 'paid'
+                WHERE cms.client_id = c.id AND cms.period = :period AND cms.invoice_id IS NOT NULL
               )
         SQL;
 

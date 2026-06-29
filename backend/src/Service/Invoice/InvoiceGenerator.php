@@ -178,10 +178,12 @@ final class InvoiceGenerator
         ]);
 
         if ($existing !== null) {
-            $existing->setPaymentStatus(PaymentStatus::Paid);
-            $existing->setPaymentMethod(PayMethod::Fakt);
             $existing->setInvoice($invoice);
-            $existing->setPaidAt(new \DateTimeImmutable());
+            if ($existing->getPaymentStatus() !== PaymentStatus::Paid) {
+                $existing->setPaymentStatus(PaymentStatus::Paid);
+                $existing->setPaymentMethod(PayMethod::Fakt);
+                $existing->setPaidAt(new \DateTimeImmutable());
+            }
         } else {
             $cms = new ClientMonthlyStatus();
             $cms->setClient($client);
