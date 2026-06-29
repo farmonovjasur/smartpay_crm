@@ -19,6 +19,7 @@ final class ClientOutput
     public string $status;
     public ?string $notes;
     public ?string $lastPaidPeriod;
+    public string $balance;
     public bool $hasActiveDebt;
     public string $createdAt;
 
@@ -36,6 +37,7 @@ final class ClientOutput
         $dto->status = $client->getStatus()->value;
         $dto->notes = $client->getNotes();
         $dto->lastPaidPeriod = $client->getLastPaidPeriod();
+        $dto->balance = $client->getBalance();
         $dto->hasActiveDebt = false; // overridden by ClientService when listing
         $dto->createdAt = $client->getCreatedAt()->format('c');
 

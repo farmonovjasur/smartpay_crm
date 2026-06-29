@@ -57,3 +57,23 @@ export function useMarkMonthlyPaid(id) {
     },
   });
 }
+
+export function usePrepay(id) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body) => clientsApi.prepay(id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.detail(id) });
+      qc.invalidateQueries({ queryKey: ['prepayments', id] });
+    },
+  });
+}
+
+export function usePrepayments(id) {
+  return useQuery({
+    queryKey: ['prepayments', id],
+    queryFn: () => clientsApi.getPrepayments(id).then((res) => res?.data ?? res),
+    enabled: !!id,
+  });
+}

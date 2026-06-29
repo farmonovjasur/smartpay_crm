@@ -54,6 +54,9 @@ class Client
     #[ORM\Column(name: 'last_paid_period', type: Types::STRING, length: 7, nullable: true)]
     private ?string $lastPaidPeriod = null;
 
+    #[ORM\Column(type: Types::DECIMAL, precision: 15, scale: 2, options: ['default' => '0.00'])]
+    private string $balance = '0.00';
+
     #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
 
@@ -180,6 +183,29 @@ class Client
     public function setLastPaidPeriod(?string $lastPaidPeriod): self
     {
         $this->lastPaidPeriod = $lastPaidPeriod;
+        return $this;
+    }
+
+    public function getBalance(): string
+    {
+        return $this->balance;
+    }
+
+    public function setBalance(string $balance): self
+    {
+        $this->balance = $balance;
+        return $this;
+    }
+
+    public function addBalance(string $amount): self
+    {
+        $this->balance = bcadd($this->balance, $amount, 2);
+        return $this;
+    }
+
+    public function deductBalance(string $amount): self
+    {
+        $this->balance = bcsub($this->balance, $amount, 2);
         return $this;
     }
 

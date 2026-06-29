@@ -22,6 +22,7 @@ export function normalizeClient(c) {
     last_paid_period: c.last_paid_period ?? c.lastPaidPeriod ?? null,
     // Backend hozircha qarz holatini ClientOutput'da qaytarmaydi — bo'lsa o'qiymiz.
     has_active_debt: c.has_active_debt ?? c.hasActiveDebt ?? false,
+    balance: c.balance ?? '0.00',
     monthly_amount: c.monthly_amount ?? c.monthlyAmount ?? null,
     created_at: c.created_at ?? c.createdAt ?? null,
   };
@@ -34,4 +35,6 @@ export const clientsApi = {
   update: (id, data) => api.put(`/clients/${id}`, data).then((r) => r.data),
   remove: (id) => api.delete(`/clients/${id}`),
   markMonthlyPaid: (id, body) => api.post(`/clients/${id}/mark-monthly-paid`, body).then((r) => r.data),
+  prepay: (id, body) => api.post(`/clients/${id}/prepay`, body).then((r) => r.data),
+  getPrepayments: (id) => api.get(`/clients/${id}/prepayments`).then((r) => r.data),
 };

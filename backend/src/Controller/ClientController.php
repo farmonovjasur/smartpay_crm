@@ -9,12 +9,14 @@ use App\Dto\Client\ClientFilter;
 use App\Dto\Client\ClientOutput;
 use App\Dto\Client\ClientUpdateInput;
 use App\Dto\Client\MarkPaidRequest;
+use App\Dto\Client\PrepayRequest;
 use App\Enum\PayMethod;
 use App\Security\Voter\ClientVoter;
 use App\Service\Client\ClientExporter;
 use App\Service\Client\ClientImporter;
 use App\Service\Client\ClientService;
 use App\Service\Client\MonthlyPaymentService;
+use App\Service\Client\PrepaymentService;
 use App\Service\Client\TemplateGenerator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -29,6 +31,7 @@ final class ClientController extends AbstractController
     public function __construct(
         private readonly ClientService $clientService,
         private readonly MonthlyPaymentService $monthlyPaymentService,
+        private readonly PrepaymentService $prepaymentService,
         private readonly ClientImporter $clientImporter,
         private readonly ClientExporter $clientExporter,
         private readonly TemplateGenerator $templateGenerator,
@@ -239,5 +242,57 @@ final class ClientController extends AbstractController
                 'method' => $cms->getPaymentMethod()?->value,
             ],
         ]);
+    }
+
+    #[Route('/{id}/prepay', name: 'client_prepay', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function prepay(int $id, Request $request): JsonResponse
+    {
+        $this->denyAccessUnlessGranted(ClientVoter::PREPAY);
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $input = new PrepayRequest();
+        $input->amount = (string) ($data['amount'] ?? '');
+        $input->method = $data['method'] ?? '';
+        $input->notes = $data['notes'] ?? null;
+
+        $errors = $this->validator->validate($input);
+        if (count($errors) > 0) {
+            $messages = [];
+            foreach ($errors as $error) {
+                $messages[$error->getPropertyPath()][] = $error->getMessage();
+            }
+            return new JsonResponse(['errors' => $messages], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        /** @var \App\Entity\User $actor */
+        $actor = $this->getUser();
+        $prepayment = $this->prepaymentService->deposit(
+            $id,
+            $input->amount,
+            PayMethod::from($input->method),
+            $input->notes,
+            $actor
+        );
+
+        return new JsonResponse([
+            'message' => "Oldindan to'lov muvaffaqiyatli qo'shildi.",
+            'data' => [
+                'id' => $prepayment->getId(),
+                'amount' => $prepayment->getAmount(),
+                'method' => $prepayment->getMethod()->value,
+                'new_balance' => $prepayment->getClient()->getBalance(),
+                'paid_at' => $prepayment->getPaidAt()->format('c'),
+            ],
+        ], Response::HTTP_CREATED);
+    }
+
+    #[Route('/{id}/prepayments', name: 'client_prepayments', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function prepayments(int $id): JsonResponse
+    {
+        $this->denyAccessUnlessGranted(ClientVoter::VIEW);
+
+        $history = $this->prepaymentService->getHistory($id);
+
+        return new JsonResponse(['data' => $history]);
     }
 }

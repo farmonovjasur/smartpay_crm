@@ -24,6 +24,7 @@ final class ClientVoter extends Voter
     public const IMPORT = 'CLIENT_IMPORT';
     public const EXPORT = 'CLIENT_EXPORT';
     public const MARK_PAID = 'CLIENT_MARK_PAID';
+    public const PREPAY = 'CLIENT_PREPAY';
 
     private const SUPPORTED_ATTRIBUTES = [
         self::VIEW,
@@ -33,6 +34,7 @@ final class ClientVoter extends Voter
         self::IMPORT,
         self::EXPORT,
         self::MARK_PAID,
+        self::PREPAY,
     ];
 
     private const ADMIN_ONLY = [

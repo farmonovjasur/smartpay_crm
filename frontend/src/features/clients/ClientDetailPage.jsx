@@ -3,12 +3,16 @@ import { Link, useParams } from '@tanstack/react-router';
 import {
   ArrowLeft, Pencil, CheckCircle2, Phone, Hash, Calendar,
   Package, CreditCard, Banknote, ClipboardList, FileText,
+  Wallet, Plus
 } from 'lucide-react';
 import { ErrorState, LoadingState } from '@/components/common';
 import { useClient } from './hooks';
 import { ClientForm } from './ClientForm';
 import { MarkMonthlyPaidDialog } from './MarkMonthlyPaidDialog';
+import { PrepayDialog } from './PrepayDialog';
+import { PrepaymentHistory } from './PrepaymentHistory';
 import { formatDate, formatPeriod } from '@/lib/date';
+import { formatMoney } from '@/lib/money';
 import { cn } from '@/lib/utils';
 
 const PAYMENT_META = {
@@ -18,10 +22,11 @@ const PAYMENT_META = {
 };
 
 export default function ClientDetailPage() {
-  const { id } = useParams({ from: '/clients/$id' });
+  const { id } = useParams({ strict: false });
   const { data: client, isLoading, isError, refetch } = useClient(id);
   const [editOpen, setEditOpen] = useState(false);
   const [markOpen, setMarkOpen] = useState(false);
+  const [prepayOpen, setPrepayOpen] = useState(false);
 
   if (isLoading) return <LoadingState />;
   if (isError || !client) return <ErrorState onRetry={refetch} />;
@@ -44,7 +49,16 @@ export default function ClientDetailPage() {
           Mijozlar ro'yxatiga qaytish
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setPrepayOpen(true)}
+            className="flex items-center gap-2 rounded-btn border border-primary bg-primary-bg px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary hover:text-white"
+          >
+            <Plus className="h-4 w-4" />
+            Oldindan to'lov
+          </button>
+          
           {showMarkPaid && (
             <button
               type="button"
@@ -92,6 +106,29 @@ export default function ClientDetailPage() {
         </div>
       </div>
 
+      {/* Balans */}
+      <div className="rounded-card border border-[var(--border)] bg-gradient-to-br from-[var(--card-bg)] to-bg-light p-6 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-teal-bg text-teal">
+            <Wallet className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-[var(--text-secondary)]">Joriy balans</p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)]">
+                {formatMoney(client.balance || 0)}
+              </span>
+              <span className="text-sm font-medium text-[var(--text-secondary)]">UZS</span>
+            </div>
+            {client.monthly_amount && Number(client.balance) > 0 && (
+              <p className="mt-1 text-xs text-success-text font-medium">
+                Taxminan {Math.floor(Number(client.balance) / Number(client.monthly_amount))} oyga yetadi
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Info grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Aloqa ma'lumotlari" icon={Phone}>
@@ -120,9 +157,13 @@ export default function ClientDetailPage() {
         </Section>
       ) : null}
 
+      {/* Prepayment History */}
+      <PrepaymentHistory clientId={id} />
+
       {/* Dialoglar */}
       <ClientForm open={editOpen} onOpenChange={setEditOpen} client={client} />
       <MarkMonthlyPaidDialog open={markOpen} onOpenChange={setMarkOpen} client={client} />
+      <PrepayDialog open={prepayOpen} onOpenChange={setPrepayOpen} client={client} />
     </div>
   );
 }
