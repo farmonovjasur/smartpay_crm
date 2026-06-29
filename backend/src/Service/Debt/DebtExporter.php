@@ -40,28 +40,31 @@ final class DebtExporter
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Qarzdorlar');
 
-        // Format columns as text where needed (INN, Phone)
-        $sheet->getStyle('C:C')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
-        $sheet->getStyle('K:K')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        // Format columns as text where needed (INN, Phone, Phone2)
+        $sheet->getStyle('E:E')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        $sheet->getStyle('M:M')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        $sheet->getStyle('O:O')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
         // Format Amount as number
-        $sheet->getStyle('I:I')->getNumberFormat()->setFormatCode('#,##0.00');
+        $sheet->getStyle('K:K')->getNumberFormat()->setFormatCode('#,##0.00');
 
         // Header row
-        $headerCols = ['A', 'C', 'E', 'G', 'I', 'K'];
+        $headerCols = ['A', 'C', 'E', 'G', 'I', 'K', 'M', 'O'];
         $headerLabels = [
+            'T/r',
             'Mijoz nomi',
             'INN',
             'Olingan maxsulot soni',
             'Qarz muddati',
             'Qarz summasi',
             'Tel raqami',
+            "Qo'shimcha raqam",
         ];
 
         foreach ($headerCols as $idx => $col) {
             $sheet->setCellValue($col . '3', $headerLabels[$idx]);
         }
 
-        $sheet->getStyle('A3:K3')->applyFromArray([
+        $sheet->getStyle('A3:O3')->applyFromArray([
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
                 'startColor' => ['rgb' => '595959'],
@@ -78,30 +81,38 @@ final class DebtExporter
         ]);
 
         $row = 4;
+        $index = 1;
         /** @var Debt $debt */
         foreach ($debts as $debt) {
             $client = $debt->getClient();
-            $sheet->setCellValue('A' . $row, $client->getName());
-            $sheet->setCellValueExplicit('C' . $row, $client->getInn(), DataType::TYPE_STRING);
-            $sheet->setCellValue('E' . $row, $client->getProductCount());
-            $sheet->setCellValue('G' . $row, $debt->getDueDate()->format('Y-m-d'));
-            $sheet->setCellValue('I' . $row, (float) $debt->getAmount());
-            $sheet->setCellValueExplicit('K' . $row, $client->getPhone(), DataType::TYPE_STRING);
+            $sheet->setCellValue('A' . $row, $index);
+            $sheet->setCellValue('C' . $row, $client->getName());
+            $sheet->setCellValueExplicit('E' . $row, $client->getInn(), DataType::TYPE_STRING);
+            $sheet->setCellValue('G' . $row, $client->getProductCount());
+            $sheet->setCellValue('I' . $row, $debt->getMonthsOverdue() . ' oy');
+            $sheet->setCellValue('K' . $row, (float) $debt->getAmount());
+            $sheet->setCellValueExplicit('M' . $row, $client->getPhone(), DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit('O' . $row, $client->getPhone2() ?? '', DataType::TYPE_STRING);
             $row++;
+            $index++;
         }
 
         $colWidths = [
-            'A' => 30, // Mijoz nomi
+            'A' => 6,  // T/r
             'B' => 4,
-            'C' => 18, // INN
+            'C' => 30, // Mijoz nomi
             'D' => 4,
-            'E' => 24, // Maxsulot soni
+            'E' => 18, // INN
             'F' => 4,
-            'G' => 16, // Qarz muddati
+            'G' => 24, // Maxsulot soni
             'H' => 4,
-            'I' => 18, // Qarz summasi
+            'I' => 16, // Qarz muddati
             'J' => 4,
-            'K' => 18, // Tel raqami
+            'K' => 18, // Qarz summasi
+            'L' => 4,
+            'M' => 18, // Tel raqami
+            'N' => 4,
+            'O' => 18, // Qo'shimcha raqam
         ];
 
         foreach ($colWidths as $col => $width) {
