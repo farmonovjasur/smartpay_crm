@@ -1,18 +1,20 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Wallet, ChevronDown, Hash } from 'lucide-react';
+import { Wallet, ChevronDown, Hash, Download } from 'lucide-react';
 import {
   PageHeader, Pagination, ErrorState, EmptyState,
 } from '@/components/common';
 import { useDebtors } from './hooks';
 import { PayDebtDialog } from './PayDebtDialog';
 import { formatMoney } from '@/lib/money';
+import { downloadFile } from '@/lib/download';
 import { cn } from '@/lib/utils';
 
 export default function DebtorsPage() {
   const [statusFilter, setStatusFilter] = useState('active');
   const [page, setPage] = useState(1);
   const [payTarget, setPayTarget] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   const filters = useMemo(
     () => ({ status: statusFilter, page }),
@@ -33,9 +35,31 @@ export default function DebtorsPage() {
 
   if (isError) return <ErrorState onRetry={refetch} />;
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await downloadFile('/debtors/export', { status: statusFilter }, 'qarzdorlar.xlsx');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Qarzdorlar" count={total || undefined} />
+      <PageHeader
+        title="Qarzdorlar"
+        count={total || undefined}
+        actions={
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 rounded-btn border border-info px-4 py-2.5 text-sm font-medium text-info-text transition-colors hover:bg-info-bg disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />{exporting ? 'Yuklanmoqda...' : 'Excel ga yuklash'}
+          </button>
+        }
+      />
 
       {/* Filter bar */}
       <div className="flex items-center gap-3">

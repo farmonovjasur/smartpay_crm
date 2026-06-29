@@ -25,6 +25,13 @@ final class DebtController extends AbstractController
     ) {
     }
 
+    #[Route('/export', name: 'debtor_export', methods: ['GET'])]
+    public function export(Request $request, \App\Service\Debt\DebtExporter $exporter): Response
+    {
+        $status = $request->query->get('status', 'active');
+        return $exporter->exportFiltered($status);
+    }
+
     #[Route('', name: 'debtor_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
