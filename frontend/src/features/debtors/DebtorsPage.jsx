@@ -1,24 +1,27 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Wallet, ChevronDown, Hash, Download } from 'lucide-react';
+import { Wallet, ChevronDown, Hash, Download, Search } from 'lucide-react';
 import {
   PageHeader, Pagination, ErrorState, EmptyState,
 } from '@/components/common';
 import { useDebtors } from './hooks';
 import { PayDebtDialog } from './PayDebtDialog';
+import { useDebounce } from '@/lib/useDebounce';
 import { formatMoney } from '@/lib/money';
 import { downloadFile } from '@/lib/download';
 import { cn } from '@/lib/utils';
 
 export default function DebtorsPage() {
   const [statusFilter, setStatusFilter] = useState('active');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [payTarget, setPayTarget] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const debouncedSearch = useDebounce(search, 400);
 
   const filters = useMemo(
-    () => ({ status: statusFilter, page }),
-    [statusFilter, page]
+    () => ({ status: statusFilter, search: debouncedSearch || undefined, page }),
+    [statusFilter, debouncedSearch, page]
   );
   const { data, isLoading, isError, refetch } = useDebtors(filters);
 
@@ -38,7 +41,7 @@ export default function DebtorsPage() {
   async function handleExport() {
     setExporting(true);
     try {
-      await downloadFile('/debtors/export', { status: statusFilter }, 'qarzdorlar.xlsx');
+      await downloadFile('/debtors/export', { status: statusFilter, search: debouncedSearch || undefined }, 'qarzdorlar.xlsx');
     } finally {
       setExporting(false);
     }
@@ -63,6 +66,18 @@ export default function DebtorsPage() {
 
       {/* Filter bar */}
       <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-secondary)]" />
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Qidiruv (ism, INN, telefon)..."
+            className="h-11 w-full rounded-btn border border-[var(--border)] bg-[var(--card-bg)] pl-11 pr-4 text-sm outline-none placeholder:text-[var(--text-secondary)] focus:ring-2 focus:ring-primary"
+          />
+        </div>
         <FilterSelect value={statusFilter} onChange={handleStatusChange} width="w-[200px]">
           <option value="active">Faqat faol qarzlar</option>
           <option value="all">Barchasi (faol + to'langan)</option>

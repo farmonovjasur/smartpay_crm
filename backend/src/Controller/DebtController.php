@@ -29,7 +29,8 @@ final class DebtController extends AbstractController
     public function export(Request $request, \App\Service\Debt\DebtExporter $exporter): Response
     {
         $status = $request->query->get('status', 'active');
-        return $exporter->exportFiltered($status);
+        $search = $request->query->get('search', '');
+        return $exporter->exportFiltered($status, $search);
     }
 
     #[Route('', name: 'debtor_list', methods: ['GET'])]
@@ -38,6 +39,7 @@ final class DebtController extends AbstractController
         $page = max(1, (int) $request->query->get('page', '1'));
         $pageSize = min(100, max(1, (int) $request->query->get('pageSize', '20')));
         $status = $request->query->get('status', 'active');
+        $search = $request->query->get('search', '');
 
         $qb = $this->em->createQueryBuilder()
             ->select('d')
@@ -48,6 +50,11 @@ final class DebtController extends AbstractController
         if ($status !== 'all') {
             $qb->andWhere('d.status = :status')
                 ->setParameter('status', $status);
+        }
+
+        if ($search !== '') {
+            $qb->andWhere('c.name LIKE :search OR c.inn LIKE :search OR c.phone LIKE :search')
+                ->setParameter('search', '%' . $search . '%');
         }
 
         $total = (int) (clone $qb)->select('COUNT(d.id)')->getQuery()->getSingleScalarResult();
