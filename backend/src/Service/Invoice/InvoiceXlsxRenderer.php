@@ -91,6 +91,12 @@ final class InvoiceXlsxRenderer
 
         // Birlik narx — config'dan (talabga ko'ra barcha mijoz uchun bir xil: 1 dona = 100 000)
         $unitPriceInt = (int) round((float) $this->configService->get('unit_price'));
+        
+        $currentYear = substr($invoice->getPeriod(), 0, 4);
+        $contractDate = '01.01.' . $currentYear;
+        
+        $periodDate = \DateTimeImmutable::createFromFormat('Y-m-d', $invoice->getPeriod() . '-01');
+        $invoicePrefix = $periodDate ? $periodDate->format('y/n') . '-' : '';
 
         $dataRow = 10;
         $index = 1;
@@ -98,22 +104,24 @@ final class InvoiceXlsxRenderer
             $client = $item->getClient();
             $quantity = $item->getQuantity();                         // Col52: mijozga qarab o'zgaradi
             $totalPrice = $unitPriceInt * $quantity;                  // Col56: umumiy narx = soni × narx
+            
+            $itemInvoiceNumber = $invoicePrefix . $item->getId();
 
             $rowData = [
                 1  => (string) $index,                               // п.п. — tartib raqami
                 2  => '0',                                           // Тип СФ — doim 0
-                // Col 4 (D): bo'sh — soliq tizimi tomonidan to'ldiriladi
+                4  => $itemInvoiceNumber,                            // Col 4: noyob va takrorlanmas raqam (masalan 26/2-2279)
                 5  => $issueDate,                                    // SF sana — BARCHA uchun bir xil
                 6  => 'Оммавий оферта',                              // Shartnoma nomi — BARCHA uchun bir xil
-                7  => $client->getServiceDate()->format('d.m.Y'),    // Shartnoma sana — MIJOZGA qarab
-                14 => $sellerInn,                                    // Seller INN — BARCHA uchun bir xil
+                7  => $contractDate,                                 // Shartnoma sana — 01.01.Y
+                14 => '312101469',                                   // Seller INN — 312101469
                 24 => $responsibleName,                              // Direktor — BARCHA uchun bir xil
                 25 => $responsibleName,                              // Bosh hisobchi — BARCHA uchun bir xil
                 28 => $item->getClientInnSnapshot(),                 // Mijoz INN — MIJOZGA qarab
                 41 => '1',                                           // Tovar p.p. — BARCHA uchun bir xil
                 45 => $productName,                                  // Tovar nomi — BARCHA uchun bir xil (oy/yil o'zgaradi)
-                46 => $ikpuCode,                                     // IKPU — BARCHA uchun bir xil
-                49 => $unitCode,                                     // O'lchov birligi — BARCHA uchun bir xil
+                46 => '11303015001000000',                           // IKPU — 11303015001000000
+                49 => '1504666',                                     // O'lchov birligi — 1504666
                 52 => (string) $quantity,                            // Soni — MIJOZGA qarab
                 53 => (string) $unitPriceInt,                        // 1 dona narx — BARCHA uchun bir xil (100000)
                 56 => (string) $totalPrice,                          // Umumiy narx — soni × narx
@@ -121,7 +129,7 @@ final class InvoiceXlsxRenderer
                 58 => '0',                                           // NDS summa — BARCHA uchun bir xil
                 59 => (string) $totalPrice,                          // Jami = Col56 bilan bir xil
                 60 => $taxBenefitCode,                               // Imtiyoz kodi — BARCHA uchun bir xil
-                65 => $originCode,                                   // Kelib chiqishi — BARCHA uchun bir xil
+                65 => '3',                                           // Kelib chiqishi — 3
             ];
 
             foreach ($rowData as $col => $value) {
