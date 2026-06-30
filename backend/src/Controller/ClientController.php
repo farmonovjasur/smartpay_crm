@@ -295,4 +295,14 @@ final class ClientController extends AbstractController
 
         return new JsonResponse(['data' => $history]);
     }
+
+    #[Route('/{id}/payments', name: 'client_payments', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function payments(int $id): JsonResponse
+    {
+        $this->denyAccessUnlessGranted(ClientVoter::VIEW);
+
+        $history = $this->clientService->getPaymentHistory($id);
+
+        return new JsonResponse(['data' => $history]);
+    }
 }

@@ -37,4 +37,5 @@ export const clientsApi = {
   markMonthlyPaid: (id, body) => api.post(`/clients/${id}/mark-monthly-paid`, body).then((r) => r.data),
   prepay: (id, body) => api.post(`/clients/${id}/prepay`, body).then((r) => r.data),
   getPrepayments: (id) => api.get(`/clients/${id}/prepayments`).then((r) => r.data),
+  getPayments: (id) => api.get(`/clients/${id}/payments`).then((r) => r.data),
 };

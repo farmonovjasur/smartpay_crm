@@ -54,6 +54,7 @@ export function useMarkMonthlyPaid(id) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all });
       qc.invalidateQueries({ queryKey: KEYS.detail(id) });
+      qc.invalidateQueries({ queryKey: ['payments', id] });
     },
   });
 }
@@ -74,6 +75,14 @@ export function usePrepayments(id) {
   return useQuery({
     queryKey: ['prepayments', id],
     queryFn: () => clientsApi.getPrepayments(id).then((res) => res?.data ?? res),
+    enabled: !!id,
+  });
+}
+
+export function usePayments(id) {
+  return useQuery({
+    queryKey: ['payments', id],
+    queryFn: () => clientsApi.getPayments(id).then((res) => res?.data ?? res),
     enabled: !!id,
   });
 }

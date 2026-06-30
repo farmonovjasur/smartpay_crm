@@ -560,4 +560,30 @@ final class ClientService
             $this->em->flush();
         }
     }
+
+    /**
+     * Get actual payment history (both monthly and debt payments) for a client.
+     *
+     * @return array<array<string, mixed>>
+     */
+    public function getPaymentHistory(int $clientId): array
+    {
+        $client = $this->findOrFail($clientId);
+
+        $payments = $this->em->getRepository(Payment::class)->findBy(
+            ['client' => $client],
+            ['paidAt' => 'DESC']
+        );
+
+        return array_map(static fn (Payment $p) => [
+            'id' => $p->getId(),
+            'amount' => $p->getAmount(),
+            'method' => $p->getPaymentMethod()->value,
+            'period' => $p->getPeriod(),
+            'paid_at' => $p->getPaidAt()->format('c'),
+            'notes' => $p->getNotes(),
+            'created_by' => $p->getCreatedBy()?->getName(),
+            'is_debt' => $p->getDebt() !== null,
+        ], $payments);
+    }
 }

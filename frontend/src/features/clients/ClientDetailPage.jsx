@@ -11,6 +11,7 @@ import { ClientForm } from './ClientForm';
 import { MarkMonthlyPaidDialog } from './MarkMonthlyPaidDialog';
 import { PrepayDialog } from './PrepayDialog';
 import { PrepaymentHistory } from './PrepaymentHistory';
+import { PaymentHistory } from './PaymentHistory';
 import { formatDate, formatPeriod } from '@/lib/date';
 import { formatMoney } from '@/lib/money';
 import { cn } from '@/lib/utils';
@@ -157,8 +158,11 @@ export default function ClientDetailPage() {
         </Section>
       ) : null}
 
-      {/* Prepayment History */}
-      <PrepaymentHistory clientId={id} />
+      {/* Payment and Prepayment Histories */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <PaymentHistory clientId={id} />
+        <PrepaymentHistory clientId={id} />
+      </div>
 
       {/* Dialoglar */}
       <ClientForm open={editOpen} onOpenChange={setEditOpen} client={client} />
