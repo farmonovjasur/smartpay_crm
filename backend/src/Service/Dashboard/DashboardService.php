@@ -16,9 +16,24 @@ final class DashboardService
     public function stats(): array
     {
         $conn = $this->em->getConnection();
+        $currentPeriod = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tashkent')))->format('Y-m');
 
         $activeClients = (int) $conn->fetchOne("SELECT COUNT(*) FROM clients WHERE status='faol' AND deleted_at IS NULL");
-        $debtorsCount = (int) $conn->fetchOne("SELECT COUNT(*) FROM debts WHERE status='active'");
+
+        // Single source of truth: last_paid_period < current_period = overdue.
+        // This is authoritative regardless of whether debts table is populated.
+        $debtorsCount = (int) $conn->fetchOne(
+            "SELECT COUNT(*) FROM clients
+             WHERE status = 'faol'
+               AND deleted_at IS NULL
+               AND last_paid_period IS NOT NULL
+               AND last_paid_period < ?",
+            [$currentPeriod]
+        );
+
+        // Total debt amount from debts table (for financial reporting).
+        // Note: if debts table is stale (cron missed), this may undercount
+        // but debtorsCount above is always correct.
         $totalDebt = $conn->fetchOne("SELECT COALESCE(SUM(amount), '0.00') FROM debts WHERE status='active'");
 
         $invoicesThisMonth = (int) $conn->fetchOne(

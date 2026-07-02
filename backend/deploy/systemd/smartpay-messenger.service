@@ -7,10 +7,15 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/smartpay/backend
-ExecStart=/usr/bin/php bin/console messenger:consume scheduler_default async --time-limit=3600 --memory-limit=256M
+ExecStart=/usr/bin/php bin/console messenger:consume scheduler_default async failed --time-limit=3600 --memory-limit=256M
 Restart=always
 RestartSec=5
 Environment=APP_ENV=prod
+
+# Watchdog: systemd will restart the service if it stops unexpectedly.
+# Combined with WorkerHeartbeatListener, the health endpoint can detect
+# prolonged downtime.
+WatchdogSec=120
 
 [Install]
 WantedBy=multi-user.target

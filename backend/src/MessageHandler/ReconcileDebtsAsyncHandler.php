@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\MessageHandler;
 
-use App\Message\DailyDebtCheck;
+use App\Message\ReconcileDebtsAsync;
 use App\Service\Debt\DebtCalculator;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -12,14 +12,12 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
- * Handles the scheduled daily debt check (03:00 via MainSchedule).
- *
- * Uses Symfony Lock to guarantee idempotency — even if the message is
- * delivered twice (retry, duplicate dispatch), the actual computation
- * only runs once per day.
+ * Handles the async debt reconciliation message.
+ * Uses Symfony Lock to ensure only one reconciliation runs per day,
+ * regardless of how many messages are dispatched.
  */
 #[AsMessageHandler]
-final class DailyDebtCheckHandler
+final class ReconcileDebtsAsyncHandler
 {
     public function __construct(
         private readonly DebtCalculator $debtCalculator,
@@ -29,35 +27,34 @@ final class DailyDebtCheckHandler
     ) {
     }
 
-    public function __invoke(DailyDebtCheck $message): void
+    public function __invoke(ReconcileDebtsAsync $message): void
     {
-        $today = new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tashkent'));
-        $dateStr = $today->format('Y-m-d');
-
         $lock = $this->lockFactory->createLock(
-            'daily_debt_reconcile_' . $dateStr,
-            ttl: 300,
+            'daily_debt_reconcile_' . $message->date,
+            ttl: 300, // 5 minutes max execution time
         );
 
+        // Non-blocking acquire — if another process already has it, skip
         if (!$lock->acquire(blocking: false)) {
-            $this->logger->debug('DailyDebtCheckHandler: skipped (lock held)', [
-                'date' => $dateStr,
+            $this->logger->debug('ReconcileDebtsAsyncHandler: skipped (lock held)', [
+                'date' => $message->date,
             ]);
             return;
         }
 
         try {
+            $today = new \DateTimeImmutable($message->date, new \DateTimeZone('Asia/Tashkent'));
             $report = $this->debtCalculator->detectNewDebtors($today);
 
-            // Record completion for health monitoring
-            $this->recordLastCheckDate($dateStr);
-
-            $this->logger->info('DailyDebtCheckHandler: completed', [
-                'date' => $dateStr,
+            $this->logger->info('ReconcileDebtsAsyncHandler: completed', [
+                'date' => $message->date,
                 'created' => $report->createdCount,
                 'incremented' => $report->incrementedCount,
                 'processed' => $report->processedClientsCount,
             ]);
+
+            // Record completion for health monitoring
+            $this->recordLastCheckDate($message->date);
         } finally {
             $lock->release();
         }
@@ -72,7 +69,7 @@ final class DailyDebtCheckHandler
                 ['date' => $date],
             );
         } catch (\Throwable $e) {
-            $this->logger->warning('Failed to record last_debt_check_date', [
+            $this->logger->warning('ReconcileDebtsAsyncHandler: failed to record date', [
                 'error' => $e->getMessage(),
             ]);
         }

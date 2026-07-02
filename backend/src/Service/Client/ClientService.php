@@ -197,7 +197,11 @@ final class ClientService
     }
 
     /**
-     * Return the subset of $clientIds that currently have an active debt.
+     * Return the subset of $clientIds that are currently overdue.
+     *
+     * Single source of truth: last_paid_period < current_period.
+     * The `debts` table is a materialized log for notifications and financial
+     * reporting — it is NOT used to determine the badge/flag shown in UI.
      *
      * @param int[] $clientIds
      * @return int[]
@@ -208,13 +212,24 @@ final class ClientService
             return [];
         }
 
+        $currentPeriod = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tashkent')))->format('Y-m');
+
         $rows = $this->em->getConnection()->fetchAllAssociative(
-            'SELECT DISTINCT client_id FROM debts WHERE status = :status AND client_id IN (:ids)',
-            ['status' => 'active', 'ids' => $clientIds],
+            'SELECT id FROM clients
+             WHERE id IN (:ids)
+               AND deleted_at IS NULL
+               AND status = :status
+               AND last_paid_period IS NOT NULL
+               AND last_paid_period < :currentPeriod',
+            [
+                'ids' => $clientIds,
+                'status' => 'faol',
+                'currentPeriod' => $currentPeriod,
+            ],
             ['ids' => \Doctrine\DBAL\ArrayParameterType::INTEGER]
         );
 
-        return array_map(static fn ($row) => (int) $row['client_id'], $rows);
+        return array_map(static fn ($row) => (int) $row['id'], $rows);
     }
 
     /**
@@ -257,6 +272,45 @@ final class ClientService
             ->setMaxResults($f->pageSize);
 
         return ['items' => $qb->getQuery()->getResult(), 'total' => $total];
+    }
+
+    /**
+     * Lazy debt reconciliation: if the client's last_paid_period is older than
+     * the current month and no active debt record exists yet, create one
+     * on-the-fly. This ensures debt visibility even when the daily cron has
+     * not run.
+     */
+    public function reconcileIfOverdue(Client $client): void
+    {
+        $lastPaid = $client->getLastPaidPeriod();
+        if ($lastPaid === null) {
+            return;
+        }
+
+        $currentPeriod = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tashkent')))->format('Y-m');
+        if (strcmp($lastPaid, $currentPeriod) >= 0) {
+            return; // paid up to date
+        }
+
+        // Already has an active debt — nothing to do
+        $existingDebt = $this->em->getRepository(Debt::class)->findOneBy([
+            'client' => $client,
+            'status' => DebtStatus::Active,
+        ]);
+        if ($existingDebt !== null) {
+            return;
+        }
+
+        // Use a system-level actor for the automated reconciliation.
+        // We look for an admin user; if none found we skip silently
+        // (the list endpoint will still flag hasActiveDebt = true via
+        // the real-time last_paid_period check).
+        $admin = $this->em->getRepository(User::class)->findOneBy([], ['id' => 'ASC']);
+        if ($admin === null) {
+            return;
+        }
+
+        $this->reconcileOverdueAfterSeeding($client, $lastPaid, $admin);
     }
 
     private function findOrFail(int $id): Client

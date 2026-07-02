@@ -124,6 +124,12 @@ final class ClientController extends AbstractController
         $this->denyAccessUnlessGranted(ClientVoter::VIEW);
 
         $client = $this->clientService->findById($id);
+
+        // On-demand reconcile: if the client is overdue but has no active debt
+        // record yet (e.g. cron has not run), create the debt lazily so that
+        // the detail page always reflects the real overdue state.
+        $this->clientService->reconcileIfOverdue($client);
+
         $output = ClientOutput::fromEntity($client);
         $output->hasActiveDebt = in_array($id, $this->clientService->findIdsWithActiveDebt([$id]), true);
 

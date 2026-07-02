@@ -20,8 +20,11 @@ export function normalizeClient(c) {
     status: c.status,
     notes: c.notes ?? '',
     last_paid_period: c.last_paid_period ?? c.lastPaidPeriod ?? null,
-    // Backend hozircha qarz holatini ClientOutput'da qaytarmaydi — bo'lsa o'qiymiz.
-    has_active_debt: c.has_active_debt ?? c.hasActiveDebt ?? false,
+    // Real-time computed flag from backend: last_paid_period < current_month
+    is_overdue: c.is_overdue ?? c.isOverdue ?? false,
+    // Primary: is_overdue (computed, always accurate). has_active_debt kept for
+    // backward compatibility but both derive from the same source of truth.
+    has_active_debt: c.has_active_debt ?? c.hasActiveDebt ?? c.is_overdue ?? c.isOverdue ?? false,
     balance: c.balance ?? '0.00',
     monthly_amount: c.monthly_amount ?? c.monthlyAmount ?? null,
     created_at: c.created_at ?? c.createdAt ?? null,
