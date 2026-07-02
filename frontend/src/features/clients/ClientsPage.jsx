@@ -14,8 +14,8 @@ import { ClientImportDialog } from './ClientImportDialog';
 
 export default function ClientsPage() {
   const t = useT();
-  const searchParams = useSearch({ from: '/clients' });
-  const navigate = useNavigate({ from: '/clients' });
+  const searchParams = useSearch({ strict: false });
+  const navigate = useNavigate();
 
   // URL search params dan olinadi
   const page = searchParams.page || 1;
@@ -34,7 +34,7 @@ export default function ClientsPage() {
 
   // URL ni yangilash helper
   function updateSearch(updates) {
-    navigate({ search: (prev) => ({ ...prev, ...updates }) });
+    navigate({ to: '/clients', search: (prev) => ({ ...prev, ...updates }) });
   }
   function setPage(p) { updateSearch({ page: p }); }
 
