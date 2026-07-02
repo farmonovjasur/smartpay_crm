@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Service\Debt;
 
+use App\Entity\Client;
 use App\Entity\Debt;
+use App\Enum\ClientStatus;
+use App\Enum\DebtStatus;
+use App\Service\Config\ConfigService;
 use Doctrine\ORM\EntityManagerInterface;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -18,28 +22,13 @@ final class DebtExporter
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly ConfigService $configService,
     ) {
     }
 
     public function exportFiltered(string $status, string $search = ''): StreamedResponse
     {
-        $qb = $this->em->createQueryBuilder()
-            ->select('d')
-            ->from(Debt::class, 'd')
-            ->innerJoin('d.client', 'c')
-            ->orderBy('d.id', 'DESC');
-
-        if ($status !== 'all') {
-            $qb->andWhere('d.status = :status')
-                ->setParameter('status', $status);
-        }
-
-        if ($search !== '') {
-            $qb->andWhere('c.name LIKE :search OR c.inn LIKE :search OR c.phone LIKE :search')
-                ->setParameter('search', '%' . $search . '%');
-        }
-
-        $debts = $qb->getQuery()->getResult();
+        $rows = $this->getExportRows($status, $search);
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -87,17 +76,15 @@ final class DebtExporter
 
         $row = 4;
         $index = 1;
-        /** @var Debt $debt */
-        foreach ($debts as $debt) {
-            $client = $debt->getClient();
+        foreach ($rows as $r) {
             $sheet->setCellValue('A' . $row, $index);
-            $sheet->setCellValue('C' . $row, $client->getName());
-            $sheet->setCellValueExplicit('E' . $row, $client->getInn(), DataType::TYPE_STRING);
-            $sheet->setCellValue('G' . $row, $client->getProductCount());
-            $sheet->setCellValue('I' . $row, $debt->getMonthsOverdue() . ' oy');
-            $sheet->setCellValue('K' . $row, (float) $debt->getAmount());
-            $sheet->setCellValueExplicit('M' . $row, $client->getPhone(), DataType::TYPE_STRING);
-            $sheet->setCellValueExplicit('O' . $row, $client->getPhone2() ?? '', DataType::TYPE_STRING);
+            $sheet->setCellValue('C' . $row, $r['name']);
+            $sheet->setCellValueExplicit('E' . $row, $r['inn'], DataType::TYPE_STRING);
+            $sheet->setCellValue('G' . $row, $r['product_count']);
+            $sheet->setCellValue('I' . $row, $r['months_overdue'] . ' oy');
+            $sheet->setCellValue('K' . $row, (float) $r['amount']);
+            $sheet->setCellValueExplicit('M' . $row, $r['phone'], DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit('O' . $row, $r['phone2'] ?? '', DataType::TYPE_STRING);
             $row++;
             $index++;
         }
@@ -138,5 +125,166 @@ final class DebtExporter
         $response->headers->set('Content-Disposition', 'attachment; filename="' . $filename . '"');
 
         return $response;
+    }
+
+    /**
+     * Build export rows using clients as source of truth for active debtors,
+     * and debts table for paid/historical records.
+     *
+     * @return array<array<string, mixed>>
+     */
+    private function getExportRows(string $status, string $search): array
+    {
+        // For "paid" status — use debts table (historical records)
+        if ($status === 'paid') {
+            return $this->getRowsFromDebtsTable($status, $search);
+        }
+
+        // For "active" or "all" — use clients as source of truth
+        $currentPeriod = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tashkent')))->format('Y-m');
+        $unitPrice = $this->configService->get('unit_price');
+
+        $qb = $this->em->createQueryBuilder()
+            ->select('c')
+            ->from(Client::class, 'c')
+            ->where('c.status = :status')
+            ->andWhere('c.deletedAt IS NULL')
+            ->andWhere('c.lastPaidPeriod IS NOT NULL')
+            ->andWhere('c.lastPaidPeriod < :currentPeriod')
+            ->setParameter('status', ClientStatus::Faol)
+            ->setParameter('currentPeriod', $currentPeriod)
+            ->orderBy('c.id', 'DESC');
+
+        if ($search !== '') {
+            $qb->andWhere('c.name LIKE :search OR c.inn LIKE :search OR c.phone LIKE :search')
+                ->setParameter('search', '%' . $search . '%');
+        }
+
+        $clients = $qb->getQuery()->getResult();
+
+        // Batch-load existing debts
+        $clientIds = array_map(fn (Client $c) => $c->getId(), $clients);
+        $debtsMap = $this->loadActiveDebtsMap($clientIds);
+
+        $rows = [];
+        foreach ($clients as $client) {
+            /** @var Client $client */
+            $debt = $debtsMap[$client->getId()] ?? null;
+
+            if ($debt !== null) {
+                $rows[] = [
+                    'name' => $client->getName(),
+                    'inn' => $client->getInn(),
+                    'product_count' => $client->getProductCount(),
+                    'months_overdue' => $debt->getMonthsOverdue(),
+                    'amount' => $debt->getAmount(),
+                    'phone' => $client->getPhone(),
+                    'phone2' => $client->getPhone2(),
+                ];
+            } else {
+                // Compute dynamically
+                $lastPaid = $client->getLastPaidPeriod();
+                $firstOverdue = $this->nextPeriod($lastPaid);
+                $monthsOverdue = $this->countMonthsBetween($firstOverdue, $currentPeriod);
+                $monthlyAmount = bcmul($unitPrice, (string) $client->getProductCount(), 2);
+                $totalAmount = bcmul($monthlyAmount, (string) $monthsOverdue, 2);
+
+                $rows[] = [
+                    'name' => $client->getName(),
+                    'inn' => $client->getInn(),
+                    'product_count' => $client->getProductCount(),
+                    'months_overdue' => $monthsOverdue,
+                    'amount' => $totalAmount,
+                    'phone' => $client->getPhone(),
+                    'phone2' => $client->getPhone2(),
+                ];
+            }
+        }
+
+        // For "all" status, also append paid debts
+        if ($status === 'all') {
+            $paidRows = $this->getRowsFromDebtsTable('paid', $search);
+            $rows = array_merge($rows, $paidRows);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<array<string, mixed>>
+     */
+    private function getRowsFromDebtsTable(string $status, string $search): array
+    {
+        $qb = $this->em->createQueryBuilder()
+            ->select('d')
+            ->from(Debt::class, 'd')
+            ->innerJoin('d.client', 'c')
+            ->orderBy('d.id', 'DESC');
+
+        if ($status !== 'all') {
+            $qb->andWhere('d.status = :status')
+                ->setParameter('status', $status);
+        }
+
+        if ($search !== '') {
+            $qb->andWhere('c.name LIKE :search OR c.inn LIKE :search OR c.phone LIKE :search')
+                ->setParameter('search', '%' . $search . '%');
+        }
+
+        $debts = $qb->getQuery()->getResult();
+
+        return array_map(fn (Debt $d) => [
+            'name' => $d->getClient()->getName(),
+            'inn' => $d->getClient()->getInn(),
+            'product_count' => $d->getClient()->getProductCount(),
+            'months_overdue' => $d->getMonthsOverdue(),
+            'amount' => $d->getAmount(),
+            'phone' => $d->getClient()->getPhone(),
+            'phone2' => $d->getClient()->getPhone2(),
+        ], $debts);
+    }
+
+    /**
+     * @param int[] $clientIds
+     * @return array<int, Debt>
+     */
+    private function loadActiveDebtsMap(array $clientIds): array
+    {
+        if ($clientIds === []) {
+            return [];
+        }
+
+        $debts = $this->em->createQueryBuilder()
+            ->select('d')
+            ->from(Debt::class, 'd')
+            ->where('d.client IN (:ids)')
+            ->andWhere('d.status = :status')
+            ->setParameter('ids', $clientIds)
+            ->setParameter('status', DebtStatus::Active)
+            ->getQuery()
+            ->getResult();
+
+        $map = [];
+        foreach ($debts as $debt) {
+            $map[$debt->getClient()->getId()] = $debt;
+        }
+
+        return $map;
+    }
+
+    private function nextPeriod(string $period): string
+    {
+        return (\DateTimeImmutable::createFromFormat('Y-m-d', $period . '-01'))
+            ->modify('+1 month')
+            ->format('Y-m');
+    }
+
+    private function countMonthsBetween(string $from, string $to): int
+    {
+        $start = \DateTimeImmutable::createFromFormat('Y-m-d', $from . '-01');
+        $end = \DateTimeImmutable::createFromFormat('Y-m-d', $to . '-01');
+        $diff = $start->diff($end);
+
+        return max(1, ($diff->y * 12) + $diff->m + 1);
     }
 }
