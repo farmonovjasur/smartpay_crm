@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
+import { Link, useParams, useRouter } from '@tanstack/react-router';
 import {
   ArrowLeft, Pencil, CheckCircle2, Phone, Hash, Calendar,
   Package, CreditCard, Banknote, ClipboardList, FileText,
@@ -24,6 +24,7 @@ const PAYMENT_META = {
 
 export default function ClientDetailPage() {
   const { id } = useParams({ strict: false });
+  const router = useRouter();
   const { data: client, isLoading, isError, refetch } = useClient(id);
   const [editOpen, setEditOpen] = useState(false);
   const [markOpen, setMarkOpen] = useState(false);
@@ -42,13 +43,14 @@ export default function ClientDetailPage() {
     <div className="space-y-6">
       {/* Top bar: orqaga qaytish + actions */}
       <div className="flex items-center justify-between">
-        <Link
-          to="/clients"
+        <button
+          type="button"
+          onClick={() => router.history.back()}
           className="inline-flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
         >
           <ArrowLeft className="h-4 w-4" />
           Mijozlar ro'yxatiga qaytish
-        </Link>
+        </button>
 
         <div className="flex flex-wrap items-center gap-3">
           <button

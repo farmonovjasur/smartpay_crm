@@ -38,7 +38,17 @@ const authLayoutRoute = createRoute({
 });
 
 const dashboardRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/dashboard', component: DashboardPage });
-const clientsRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/clients', component: ClientsPage });
+const clientsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/clients',
+  component: ClientsPage,
+  validateSearch: (search) => ({
+    page: Number(search.page) || 1,
+    search: search.search || '',
+    payment_type: search.payment_type || '',
+    status: search.status || '',
+  }),
+});
 const clientDetailRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/clients/$id', component: ClientDetailPage });
 const invoicesRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/invoices', component: InvoicesPage });
 const invoiceDetailRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/invoices/$id', component: InvoiceDetailPage });

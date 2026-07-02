@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useSearch, useNavigate } from '@tanstack/react-router';
 import { Plus, Search, Upload, Download, ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { Pagination, PageHeader, ErrorState, ConfirmDialog, RoleGate } from '@/components/common';
 import { useClients, useDeleteClient } from './hooks';
@@ -14,16 +14,29 @@ import { ClientImportDialog } from './ClientImportDialog';
 
 export default function ClientsPage() {
   const t = useT();
-  const [search, setSearch] = useState('');
-  const [paymentType, setPaymentType] = useState('');
-  const [status, setStatus] = useState('');
-  const [page, setPage] = useState(1);
+  const searchParams = useSearch({ from: '/clients' });
+  const navigate = useNavigate({ from: '/clients' });
+
+  // URL search params dan olinadi
+  const page = searchParams.page || 1;
+  const paymentType = searchParams.payment_type || '';
+  const status = searchParams.status || '';
+
+  // search input uchun local state kerak (debounce bilan ishlash uchun)
+  const [searchInput, setSearchInput] = useState(searchParams.search || '');
+  const debouncedSearch = useDebounce(searchInput, 400);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editClient, setEditClient] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [exporting, setExporting] = useState(false);
-  const debouncedSearch = useDebounce(search, 400);
+
+  // URL ni yangilash helper
+  function updateSearch(updates) {
+    navigate({ search: (prev) => ({ ...prev, ...updates }) });
+  }
+  function setPage(p) { updateSearch({ page: p }); }
 
   const filters = useMemo(() => ({
     search: debouncedSearch || undefined,
@@ -35,8 +48,8 @@ export default function ClientsPage() {
   const { data, isLoading, isError, refetch } = useClients(filters);
   const deleteClient = useDeleteClient();
 
-  function handleSearchChange(v) { setSearch(v); setPage(1); }
-  function handleFilterChange(setter) { return (e) => { setter(e.target.value); setPage(1); }; }
+  function handleSearchChange(v) { setSearchInput(v); updateSearch({ search: v, page: 1 }); }
+  function handleFilterChange(key) { return (e) => { updateSearch({ [key]: e.target.value, page: 1 }); }; }
 
   function openCreate() { setEditClient(null); setFormOpen(true); }
   function openEdit(client) { setEditClient(client); setFormOpen(true); }
@@ -100,19 +113,19 @@ export default function ClientsPage() {
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-secondary)]" />
           <input
-            value={search}
+            value={searchInput}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder={t('clients.searchPlaceholder')}
             className="h-11 w-full rounded-btn border border-[var(--border)] bg-[var(--card-bg)] pl-11 pr-4 text-sm outline-none placeholder:text-[var(--text-secondary)] focus:ring-2 focus:ring-primary"
           />
         </div>
-        <FilterSelect value={paymentType} onChange={handleFilterChange(setPaymentType)} width="w-[180px]">
+        <FilterSelect value={paymentType} onChange={handleFilterChange('payment_type')} width="w-[180px]">
           <option value="">{t('clients.paymentType.all')}</option>
           <option value="fakt">{t('clients.paymentType.fakt')}</option>
           <option value="naqt">{t('clients.paymentType.naqt')}</option>
           <option value="qarz">{t('clients.paymentType.qarz')}</option>
         </FilterSelect>
-        <FilterSelect value={status} onChange={handleFilterChange(setStatus)} width="w-[160px]">
+        <FilterSelect value={status} onChange={handleFilterChange('status')} width="w-[160px]">
           <option value="">{t('clients.statusFilter.all')}</option>
           <option value="faol">{t('clients.statusFilter.active')}</option>
           <option value="nofaol">{t('clients.statusFilter.inactive')}</option>
