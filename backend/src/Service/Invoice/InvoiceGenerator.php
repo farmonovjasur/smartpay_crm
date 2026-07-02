@@ -195,6 +195,13 @@ final class InvoiceGenerator
             $cms->setPaidAt(new \DateTimeImmutable());
             $this->em->persist($cms);
         }
+
+        // Ensure last_paid_period is updated to stay in sync with CMS
+        $currentLastPaid = $client->getLastPaidPeriod();
+        if ($currentLastPaid === null || strcmp($period, $currentLastPaid) > 0) {
+            $client->setLastPaidPeriod($period);
+            $client->setUpdatedAt(new \DateTimeImmutable());
+        }
     }
 
     /**
