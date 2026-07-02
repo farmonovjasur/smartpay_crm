@@ -45,6 +45,8 @@ Loyihani yangilash uchun:
 # Avtomatik yangilash skripti
 cd /var/www/smartpay/deploy
 ./update.sh
+#yoki
+chmod +x ./update.sh && ./update.sh
 ```
 
 Yoki qo'lda:
