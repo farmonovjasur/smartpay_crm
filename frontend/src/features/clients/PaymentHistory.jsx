@@ -63,8 +63,23 @@ export function PaymentHistory({ clientId }) {
                 <td className="px-5 py-3 font-medium text-[var(--text-primary)] whitespace-nowrap">
                   {formatPeriod(row.period)}
                 </td>
-                <td className="px-5 py-3 font-medium text-success-text whitespace-nowrap">
-                  {formatMoney(row.amount)} UZS
+                <td className="px-5 py-3 whitespace-nowrap">
+                  <div className="flex flex-col">
+                    {row.applied_amount && parseFloat(row.amount) !== parseFloat(row.applied_amount) ? (
+                      <>
+                        <span className="text-[var(--text-secondary)] text-xs font-normal">
+                          Kiritildi: {formatMoney(row.amount)} UZS
+                        </span>
+                        <span className="text-success-text font-semibold mt-0.5">
+                          Yechildi: {formatMoney(row.applied_amount)} UZS
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-success-text font-semibold">
+                        {formatMoney(row.amount)} UZS
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-5 py-3 whitespace-nowrap">
                   {row.is_debt ? (

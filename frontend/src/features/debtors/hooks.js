@@ -35,8 +35,9 @@ export function usePayDebt(id) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all });
       qc.invalidateQueries({ queryKey: KEYS.detail(id) });
-      // Mijozning has_active_debt holati ham o'zgarishi mumkin.
+      // Mijozning has_active_debt holati va to'lovlar tarixi ham o'zgarishi mumkin.
       qc.invalidateQueries({ queryKey: ['clients'] });
+      qc.invalidateQueries({ queryKey: ['payments'] });
     },
   });
 }

@@ -8,6 +8,7 @@ import { useDebtors } from './hooks';
 import { PayDebtDialog } from './PayDebtDialog';
 import { useDebounce } from '@/lib/useDebounce';
 import { formatMoney } from '@/lib/money';
+import { formatDate } from '@/lib/date';
 import { downloadFile } from '@/lib/download';
 import { cn } from '@/lib/utils';
 
@@ -79,8 +80,9 @@ export default function DebtorsPage() {
           />
         </div>
         <FilterSelect value={statusFilter} onChange={handleStatusChange} width="w-[200px]">
-          <option value="active">Faqat faol qarzlar</option>
-          <option value="all">Barchasi (faol + to'langan)</option>
+          <option value="active">Faol qarzlar</option>
+          <option value="paid">To'langan</option>
+          <option value="all">Barchasi</option>
         </FilterSelect>
       </div>
 
@@ -97,19 +99,20 @@ export default function DebtorsPage() {
                 <th className="px-3 py-3.5">Qarz muddati</th>
                 <th className="px-3 py-3.5">Holat</th>
                 <th className="px-3 py-3.5 text-right">Qarz summasi</th>
+                <th className="px-3 py-3.5 text-right">To'langan</th>
                 <th className="w-32 px-3 py-3.5 text-center">Amal</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-[var(--text-secondary)]">
+                  <td colSpan={9} className="py-16 text-center text-[var(--text-secondary)]">
                     Yuklanmoqda…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center">
+                  <td colSpan={9} className="py-16 text-center">
                     <EmptyState
                       title="Qarzdorlar topilmadi"
                       description={
@@ -155,18 +158,44 @@ export default function DebtorsPage() {
                       <StatusBadge status={debt.status} />
                     </td>
                     <td className="px-3 py-3.5 text-right font-semibold tabular-nums text-[var(--text-primary)]">
-                      {formatMoney(debt.amount)} <span className="text-xs text-[var(--text-secondary)]">so'm</span>
+                      {debt.status === 'partial' ? (
+                        <div>
+                          <span className="text-[var(--text-secondary)] line-through text-xs">
+                            {formatMoney(debt.amount)}
+                          </span>
+                          <br />
+                          {formatMoney(debt.remaining_amount)} <span className="text-xs text-[var(--text-secondary)]">so'm</span>
+                        </div>
+                      ) : (
+                        <>{formatMoney(debt.amount)} <span className="text-xs text-[var(--text-secondary)]">so'm</span></>
+                      )}
+                    </td>
+                    <td className="px-3 py-3.5 text-right tabular-nums">
+                      {parseFloat(debt.paid_amount) > 0 ? (
+                        <div className="flex flex-col items-end">
+                          <span className="font-semibold text-success">
+                            {formatMoney(debt.paid_amount)} <span className="text-xs">so'm</span>
+                          </span>
+                          {debt.paid_at && (
+                            <span className="text-[10px] text-[var(--text-secondary)] mt-0.5">
+                              {formatDate(debt.paid_at)}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-[var(--text-secondary)]">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-3.5">
                       <div className="flex items-center justify-center">
-                        {debt.status === 'active' ? (
+                        {(debt.status === 'active' || debt.status === 'partial') ? (
                           <button
                             type="button"
                             onClick={() => setPayTarget(debt)}
                             className="flex items-center gap-1.5 rounded-btn bg-success px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:opacity-90"
                           >
                             <Wallet className="h-3.5 w-3.5" />
-                            To'lash
+                            {debt.status === 'partial' ? "Davom" : "To'lash"}
                           </button>
                         ) : (
                           <span className="text-xs text-[var(--text-secondary)]">—</span>
@@ -247,6 +276,13 @@ function StatusBadge({ status }) {
     return (
       <span className="inline-flex items-center rounded-xl bg-success-bg px-2.5 py-1 text-[11px] font-medium text-success-text">
         To'langan
+      </span>
+    );
+  }
+  if (status === 'partial') {
+    return (
+      <span className="inline-flex items-center rounded-xl bg-warning-bg px-2.5 py-1 text-[11px] font-medium text-warning-text">
+        Qisman to'langan
       </span>
     );
   }

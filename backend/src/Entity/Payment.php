@@ -34,6 +34,9 @@ class Payment
     #[ORM\Column(type: Types::DECIMAL, precision: 15, scale: 2)]
     private string $amount;
 
+    #[ORM\Column(name: 'applied_amount', type: Types::DECIMAL, precision: 15, scale: 2, nullable: true)]
+    private ?string $appliedAmount = null;
+
     #[ORM\Column(name: 'payment_method', type: Types::STRING, length: 10, enumType: PayMethod::class)]
     private PayMethod $paymentMethod;
 
@@ -156,6 +159,17 @@ class Payment
     public function setNotes(?string $notes): self
     {
         $this->notes = $notes;
+        return $this;
+    }
+
+    public function getAppliedAmount(): ?string
+    {
+        return $this->appliedAmount ?? $this->amount;
+    }
+
+    public function setAppliedAmount(?string $appliedAmount): self
+    {
+        $this->appliedAmount = $appliedAmount;
         return $this;
     }
 }

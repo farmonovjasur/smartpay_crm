@@ -25,3 +25,7 @@ export function showWarning(message) {
   if (isDuplicate(message)) return;
   toast.warning(message);
 }
+
+export function showInfo(message) {
+  toast.info(message);
+}

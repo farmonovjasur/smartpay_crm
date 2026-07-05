@@ -55,7 +55,7 @@ final class DebtController extends AbstractController
         $currentPeriod = (new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tashkent')))->format('Y-m');
 
         // For "paid" or "all" filters, we still need the debts table
-        if ($status === 'paid') {
+        if ($status === 'paid' || $status === 'all') {
             return $this->listFromDebtsTable($page, $pageSize, $status, $search);
         }
 
@@ -100,6 +100,8 @@ final class DebtController extends AbstractController
                     'client_name' => $client->getName(),
                     'client_inn' => $client->getInn(),
                     'amount' => $debt->getAmount(),
+                    'paid_amount' => $debt->getPaidAmount(),
+                    'remaining_amount' => $debt->getRemainingAmount(),
                     'monthly_amount' => $debt->getMonthlyAmount(),
                     'months_overdue' => $debt->getMonthsOverdue(),
                     'first_overdue_period' => $debt->getFirstOverduePeriod(),
@@ -107,6 +109,8 @@ final class DebtController extends AbstractController
                     'payment_type_snapshot' => $debt->getPaymentTypeSnapshot()->value,
                     'status' => $debt->getStatus()->value,
                     'due_date' => $debt->getDueDate()->format('Y-m-d'),
+                    'paid_at' => $debt->getPaidAt()?->format('c'),
+                    'paid_method' => $debt->getPaidMethod()?->value,
                 ];
             }
 
@@ -123,6 +127,8 @@ final class DebtController extends AbstractController
                 'client_name' => $client->getName(),
                 'client_inn' => $client->getInn(),
                 'amount' => $totalAmount,
+                'paid_amount' => '0.00',
+                'remaining_amount' => $totalAmount,
                 'monthly_amount' => $monthlyAmount,
                 'months_overdue' => $monthsOverdue,
                 'first_overdue_period' => $firstOverdue,
@@ -148,13 +154,17 @@ final class DebtController extends AbstractController
             'id' => $debt->getId(),
             'client_id' => $debt->getClient()->getId(),
             'client_name' => $debt->getClient()->getName(),
+            'client_inn' => $debt->getClient()->getInn(),
             'amount' => $debt->getAmount(),
+            'paid_amount' => $debt->getPaidAmount(),
+            'remaining_amount' => $debt->getRemainingAmount(),
             'monthly_amount' => $debt->getMonthlyAmount(),
             'months_overdue' => $debt->getMonthsOverdue(),
             'first_overdue_period' => $debt->getFirstOverduePeriod(),
             'last_overdue_period' => $debt->getLastOverduePeriod(),
             'payment_type_snapshot' => $debt->getPaymentTypeSnapshot()->value,
             'status' => $debt->getStatus()->value,
+            'balance' => $debt->getClient()->getBalance(),
             'paid_at' => $debt->getPaidAt()?->format('c'),
             'paid_method' => $debt->getPaidMethod()?->value,
         ]]);
@@ -165,22 +175,40 @@ final class DebtController extends AbstractController
     {
         $data = json_decode($request->getContent(), true) ?? [];
         $method = $data['method'] ?? '';
+        $amount = $data['amount'] ?? null;
 
         if (!in_array($method, ['fakt', 'naqt'], true)) {
             return new JsonResponse(['error' => 'method must be fakt or naqt'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        if ($amount === null || $amount === '') {
+            return new JsonResponse(['error' => "To'lov summasi kiritilishi shart"], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
         /** @var \App\Entity\User $actor */
         $actor = $this->getUser();
-        $debt = $this->paymentProcessor->payDebt($id, PayMethod::from($method), $actor);
+        $result = $this->paymentProcessor->payDebt($id, (string) $amount, PayMethod::from($method), $actor);
+
+        /** @var \App\Entity\Debt $debt */
+        $debt = $result['debt'];
+
+        $message = $result['fully_paid']
+            ? "Qarz to'liq to'landi."
+            : sprintf("Qisman to'lov qabul qilindi. Qolgan qarz: %s so'm.", number_format((float) $result['remaining'], 0, '.', ' '));
 
         return new JsonResponse([
-            'message' => 'Debt paid successfully.',
+            'message' => $message,
             'data' => [
                 'id' => $debt->getId(),
                 'status' => $debt->getStatus()->value,
                 'paid_method' => $debt->getPaidMethod()?->value,
                 'amount' => $debt->getAmount(),
+                'paid_amount' => $debt->getPaidAmount(),
+                'remaining_amount' => $result['remaining'],
+                'overpayment' => $result['overpayment'],
+                'balance' => $result['balance'],
+                'fully_paid' => $result['fully_paid'],
+                'months_closed' => $result['months_closed'],
             ],
         ]);
     }
@@ -222,6 +250,8 @@ final class DebtController extends AbstractController
             'client_name' => $d->getClient()->getName(),
             'client_inn' => $d->getClient()->getInn(),
             'amount' => $d->getAmount(),
+            'paid_amount' => $d->getPaidAmount(),
+            'remaining_amount' => $d->getRemainingAmount(),
             'monthly_amount' => $d->getMonthlyAmount(),
             'months_overdue' => $d->getMonthsOverdue(),
             'first_overdue_period' => $d->getFirstOverduePeriod(),
@@ -250,9 +280,9 @@ final class DebtController extends AbstractController
             ->select('d')
             ->from(Debt::class, 'd')
             ->where('d.client IN (:ids)')
-            ->andWhere('d.status = :status')
+            ->andWhere('d.status IN (:statuses)')
             ->setParameter('ids', $clientIds)
-            ->setParameter('status', DebtStatus::Active)
+            ->setParameter('statuses', [DebtStatus::Active, DebtStatus::Partial])
             ->getQuery()
             ->getResult();
 

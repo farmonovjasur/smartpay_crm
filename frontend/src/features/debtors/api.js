@@ -13,6 +13,8 @@ export function normalizeDebt(d) {
     client_name: d.client_name ?? d.clientName ?? '',
     client_inn: d.client_inn ?? d.clientInn ?? '',
     amount: d.amount ?? '0',
+    paid_amount: d.paid_amount ?? d.paidAmount ?? '0.00',
+    remaining_amount: d.remaining_amount ?? d.remainingAmount ?? d.amount ?? '0',
     monthly_amount: d.monthly_amount ?? d.monthlyAmount ?? '0',
     months_overdue: d.months_overdue ?? d.monthsOverdue ?? 0,
     payment_type_snapshot: d.payment_type_snapshot ?? d.paymentTypeSnapshot ?? '',
@@ -21,6 +23,7 @@ export function normalizeDebt(d) {
     last_overdue_period: d.last_overdue_period ?? d.lastOverduePeriod ?? '',
     paid_at: d.paid_at ?? d.paidAt ?? null,
     paid_method: d.paid_method ?? d.paidMethod ?? null,
+    balance: d.balance ?? '0.00',
     created_at: d.created_at ?? d.createdAt ?? null,
   };
 }
@@ -30,3 +33,4 @@ export const debtorsApi = {
   get: (id) => api.get(`/debtors/${id}`).then((r) => r.data),
   pay: (id, body) => api.post(`/debtors/${id}/pay`, body).then((r) => r.data),
 };
+

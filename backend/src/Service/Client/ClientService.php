@@ -152,10 +152,8 @@ final class ClientService
         // Close any active debt before soft-deleting the client so that the
         // /api/debtors listing (which inner-joins clients) does not display a
         // dangling reference and so that admins still see the audit trail.
-        $activeDebt = $this->em->getRepository(Debt::class)->findOneBy([
-            'client' => $client,
-            'status' => DebtStatus::Active,
-        ]);
+        // Close any active/partial debt before soft-deleting the client
+        $activeDebt = $this->findOpenDebt($client);
         if ($activeDebt !== null) {
             $this->closeDebt($activeDebt, $actor);
         }
@@ -293,10 +291,8 @@ final class ClientService
         }
 
         // Already has an active debt — nothing to do
-        $existingDebt = $this->em->getRepository(Debt::class)->findOneBy([
-            'client' => $client,
-            'status' => DebtStatus::Active,
-        ]);
+        // Already has an active/partial debt — nothing to do
+        $existingDebt = $this->findOpenDebt($client);
         if ($existingDebt !== null) {
             return;
         }
@@ -423,10 +419,7 @@ final class ClientService
         $lastOverdueCandidate = $this->computeLastOverduePeriod($today, $client->getServiceDate());
 
         $debtRepo = $this->em->getRepository(Debt::class);
-        $existingDebt = $debtRepo->findOneBy([
-            'client' => $client,
-            'status' => DebtStatus::Active,
-        ]);
+        $existingDebt = $this->findOpenDebt($client);
 
         // Client is paid up through the boundary: nothing to flag, but a
         // lingering active debt must be closed (forward edit scenario).
@@ -476,6 +469,20 @@ final class ClientService
         $totalAmount = bcmul($monthlyAmount, (string) $monthsOverdue, 2);
 
         if ($existingDebt !== null) {
+            // paidAmount ni saqlab qolish — DebtCalculator logikasi bilan bir xil
+            $oldPaidAmount = $existingDebt->getPaidAmount();
+            if (bccomp($oldPaidAmount, $totalAmount, 2) >= 0) {
+                $existingDebt->setPaidAmount($totalAmount);
+                $existingDebt->setStatus(DebtStatus::Paid);
+                $existingDebt->setPaidAt(new \DateTimeImmutable());
+                $existingDebt->setPaidMethod(PayMethod::Naqt);
+            } else {
+                $existingDebt->setStatus(
+                    bccomp($oldPaidAmount, '0.00', 2) > 0
+                        ? DebtStatus::Partial
+                        : DebtStatus::Active
+                );
+            }
             $existingDebt->setMonthlyAmount($monthlyAmount);
             $existingDebt->setMonthsOverdue($monthsOverdue);
             $existingDebt->setAmount($totalAmount);
@@ -521,16 +528,19 @@ final class ClientService
     {
         $now = new \DateTimeImmutable();
 
+        $remainingAmount = $debt->getRemainingAmount();
+
         $payment = new Payment();
         $payment->setClient($debt->getClient());
         $payment->setDebt($debt);
-        $payment->setAmount($debt->getAmount());
+        $payment->setAmount($remainingAmount);
         $payment->setPaymentMethod(PayMethod::Naqt);
         $payment->setPeriod($debt->getLastOverduePeriod());
         $payment->setCreatedBy($actor);
         $payment->setNotes('client_last_paid_period_update');
         $this->em->persist($payment);
 
+        $debt->setPaidAmount($debt->getAmount());
         $debt->setStatus(DebtStatus::Paid);
         $debt->setPaidAt($now);
         $debt->setPaidMethod(PayMethod::Naqt);
@@ -605,14 +615,26 @@ final class ClientService
             ['client_id' => $client->getId()],
         );
 
-        $debt = $this->em->getRepository(Debt::class)->findOneBy([
-            'client' => $client,
-            'status' => DebtStatus::Active,
-        ]);
+        $debt = $this->findOpenDebt($client);
         if ($debt !== null) {
             $this->em->remove($debt);
             $this->em->flush();
         }
+    }
+
+    /**
+     * Active yoki Partial statusdagi ochiq qarzni topish.
+     */
+    private function findOpenDebt(Client $client): ?Debt
+    {
+        $debtRepo = $this->em->getRepository(Debt::class);
+        return $debtRepo->findOneBy([
+            'client' => $client,
+            'status' => DebtStatus::Active,
+        ]) ?? $debtRepo->findOneBy([
+            'client' => $client,
+            'status' => DebtStatus::Partial,
+        ]);
     }
 
     /**
@@ -632,6 +654,7 @@ final class ClientService
         return array_map(static fn (Payment $p) => [
             'id' => $p->getId(),
             'amount' => $p->getAmount(),
+            'applied_amount' => $p->getAppliedAmount(),
             'method' => $p->getPaymentMethod()->value,
             'period' => $p->getPeriod(),
             'paid_at' => $p->getPaidAt()->format('c'),

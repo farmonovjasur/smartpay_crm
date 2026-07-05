@@ -7,5 +7,6 @@ namespace App\Enum;
 enum DebtStatus: string
 {
     case Active = 'active';
+    case Partial = 'partial';
     case Paid = 'paid';
 }

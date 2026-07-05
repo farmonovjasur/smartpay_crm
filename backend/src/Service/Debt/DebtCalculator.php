@@ -114,13 +114,11 @@ final class DebtCalculator
             // ── Phase 2: Recalculate overdue months after balance deductions ──
             $effectiveLastPaid = $client->getLastPaidPeriod();
             if (strcmp($effectiveLastPaid, $currentPeriod) >= 0) {
-                // All months covered by balance — close any existing debt
-                $existingDebt = $debtRepo->findOneBy([
-                    'client' => $client,
-                    'status' => DebtStatus::Active,
-                ]);
+                // All months covered by balance — close any existing active/partial debt
+                $existingDebt = $this->findOpenDebt($debtRepo, $client);
                 if ($existingDebt !== null) {
                     $existingDebt->setStatus(DebtStatus::Paid);
+                    $existingDebt->setPaidAmount($existingDebt->getAmount());
                     $existingDebt->setPaidAt(new \DateTimeImmutable());
                     $existingDebt->setPaidMethod(PayMethod::Naqt);
                     $existingDebt->setUpdatedAt(new \DateTimeImmutable());
@@ -159,14 +157,29 @@ final class DebtCalculator
 
             $totalAmount = bcmul($monthlyAmount, (string) $monthsOverdue, 2);
 
-            // Check for existing active debt
-            $existingDebt = $debtRepo->findOneBy([
-                'client' => $client,
-                'status' => DebtStatus::Active,
-            ]);
+            // Check for existing active or partial debt
+            $existingDebt = $this->findOpenDebt($debtRepo, $client);
 
             if ($existingDebt !== null) {
-                // Update existing debt with current overdue info
+                // Qisman to'langan paidAmount ni saqlab qolish:
+                // Agar oylar soni yoki oylik narx o'zgargan bo'lsa, totalAmount o'zgaradi.
+                // paidAmount eski qiymatini saqlaymiz, lekin yangi totalAmount dan
+                // oshib ketmasligini tekshiramiz.
+                $oldPaidAmount = $existingDebt->getPaidAmount();
+                if (bccomp($oldPaidAmount, $totalAmount, 2) >= 0) {
+                    // Avvalgi to'lovlar yangi qarzdan ko'p — to'liq paid
+                    $existingDebt->setPaidAmount($totalAmount);
+                    $existingDebt->setStatus(DebtStatus::Paid);
+                    $existingDebt->setPaidAt(new \DateTimeImmutable());
+                    $existingDebt->setPaidMethod(PayMethod::Naqt);
+                } else {
+                    $existingDebt->setStatus(
+                        bccomp($oldPaidAmount, '0.00', 2) > 0
+                            ? DebtStatus::Partial
+                            : DebtStatus::Active
+                    );
+                }
+
                 $existingDebt->setMonthlyAmount($monthlyAmount);
                 $existingDebt->setMonthsOverdue($monthsOverdue);
                 $existingDebt->setAmount($totalAmount);
@@ -217,5 +230,19 @@ final class DebtCalculator
             '/debtors',
         );
         $this->notificationService->flush();
+    }
+
+    /**
+     * Active yoki Partial statusdagi qarzni topish.
+     */
+    private function findOpenDebt(object $debtRepo, Client $client): ?Debt
+    {
+        return $debtRepo->findOneBy([
+            'client' => $client,
+            'status' => DebtStatus::Active,
+        ]) ?? $debtRepo->findOneBy([
+            'client' => $client,
+            'status' => DebtStatus::Partial,
+        ]);
     }
 }

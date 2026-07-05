@@ -57,10 +57,13 @@ class Debt
     #[ORM\JoinColumn(name: 'paid_by', nullable: true, onDelete: 'SET NULL')]
     private ?User $paidBy = null;
 
+    #[ORM\Column(name: 'paid_amount', type: Types::DECIMAL, precision: 15, scale: 2, options: ['default' => '0.00'])]
+    private string $paidAmount = '0.00';
+
     #[ORM\Column(type: Types::STRING, length: 10, enumType: DebtStatus::class, options: ['default' => 'active'])]
     private DebtStatus $status = DebtStatus::Active;
 
-    #[ORM\Column(name: 'is_active', type: Types::SMALLINT, nullable: true, insertable: false, updatable: false, columnDefinition: "TINYINT GENERATED ALWAYS AS (CASE WHEN status='active' THEN 1 ELSE NULL END) STORED")]
+    #[ORM\Column(name: 'is_active', type: Types::SMALLINT, nullable: true, insertable: false, updatable: false, columnDefinition: "TINYINT GENERATED ALWAYS AS (CASE WHEN status IN ('active', 'partial') THEN 1 ELSE NULL END) STORED")]
     private ?int $isActive = null;
 
     #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE)]
@@ -209,6 +212,34 @@ class Debt
     {
         $this->status = $status;
         return $this;
+    }
+
+    public function getPaidAmount(): string
+    {
+        return $this->paidAmount;
+    }
+
+    public function setPaidAmount(string $paidAmount): self
+    {
+        $this->paidAmount = $paidAmount;
+        return $this;
+    }
+
+    /**
+     * Qisman to'langan summani oshirish.
+     */
+    public function addPaidAmount(string $amount): self
+    {
+        $this->paidAmount = bcadd($this->paidAmount, $amount, 2);
+        return $this;
+    }
+
+    /**
+     * Qolgan qarz summasi: amount - paidAmount.
+     */
+    public function getRemainingAmount(): string
+    {
+        return bcsub($this->amount, $this->paidAmount, 2);
     }
 
     public function getIsActive(): ?int

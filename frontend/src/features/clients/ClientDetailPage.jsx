@@ -161,7 +161,7 @@ export default function ClientDetailPage() {
       ) : null}
 
       {/* Payment and Prepayment Histories */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="space-y-6">
         <PaymentHistory clientId={id} />
         <PrepaymentHistory clientId={id} />
       </div>

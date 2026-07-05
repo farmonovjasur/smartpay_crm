@@ -16,22 +16,59 @@ use App\Service\Audit\AuditLogger;
 use App\Service\Util\PeriodRangeIterator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
+/**
+ * Qisman to'lovni qo'llab-quvvatlaydigan to'lov protsessori.
+ *
+ * Biznes qoidalar:
+ * - Minimal to'lov: 1 000 so'm
+ * - Oylar FIFO tartibda yopiladi (eng eskidan boshlab)
+ * - Ortiqcha summa mijoz balansiga tushadi
+ * - Har bir to'lov alohida Payment record yaratadi (audit trail)
+ */
 final class PaymentProcessor
 {
+    /** @var string Minimal to'lov summasi (so'mda) */
+    private const MIN_PAYMENT_AMOUNT = '1000.00';
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly AuditLogger $auditLogger,
     ) {
     }
 
-    public function payDebt(int $debtId, PayMethod $method, User $actor): Debt
+    /**
+     * Qarzni to'liq yoki qisman to'lash.
+     *
+     * @return array{
+     *     debt: Debt,
+     *     paid: string,
+     *     remaining: string,
+     *     overpayment: string,
+     *     balance: string,
+     *     fully_paid: bool,
+     *     months_closed: int,
+     * }
+     */
+    public function payDebt(int $debtId, string $amount, PayMethod $method, User $actor): array
     {
+        // Validatsiya: summa raqam va minimal chegaradan yuqori bo'lishi kerak
+        if (!is_numeric($amount) || bccomp($amount, '0', 2) <= 0) {
+            throw new UnprocessableEntityHttpException("To'lov summasi musbat son bo'lishi kerak.");
+        }
+
+        if (bccomp($amount, self::MIN_PAYMENT_AMOUNT, 2) < 0) {
+            throw new UnprocessableEntityHttpException(
+                sprintf("Minimal to'lov summasi %s so'm.", number_format((float) self::MIN_PAYMENT_AMOUNT, 0, '.', ' '))
+            );
+        }
+
         $conn = $this->em->getConnection();
         $conn->beginTransaction();
 
         try {
-            // SELECT FOR UPDATE
+            // SELECT FOR UPDATE — concurrency xavfsizligi
             $row = $conn->fetchAssociative(
                 'SELECT * FROM debts WHERE id = ? FOR UPDATE',
                 [$debtId]
@@ -42,7 +79,7 @@ final class PaymentProcessor
                 throw new NotFoundHttpException('Debt not found.');
             }
 
-            if ($row['status'] !== 'active') {
+            if ($row['status'] === 'paid') {
                 $conn->rollBack();
                 throw new DebtAlreadyPaidException();
             }
@@ -51,30 +88,131 @@ final class PaymentProcessor
             $debt = $this->em->find(Debt::class, $debtId);
             $this->em->refresh($debt);
 
-            // Mark debt as paid
-            $debt->setStatus(DebtStatus::Paid);
+            $client = $debt->getClient();
+            $remaining = $debt->getRemainingAmount();
+
+            // Amaliy to'lov summasi — qarz qoldig'idan ortiq bo'lsa, faqat qoldiqni yopamiz
+            $actualPayment = (bccomp($amount, $remaining, 2) >= 0) ? $remaining : $amount;
+            $overpayment = (bccomp($amount, $remaining, 2) > 0)
+                ? bcsub($amount, $remaining, 2)
+                : '0.00';
+            $fullyPaid = bccomp($amount, $remaining, 2) >= 0;
+
+            // ── 1. Debt'ga to'langan summani qo'shish va oxirgi to'lov ma'lumotlarini yangilash ──
+            $debt->addPaidAmount($actualPayment);
+            $debt->setUpdatedAt(new \DateTimeImmutable());
             $debt->setPaidAt(new \DateTimeImmutable());
             $debt->setPaidMethod($method);
             $debt->setPaidBy($actor);
-            $debt->setUpdatedAt(new \DateTimeImmutable());
 
-            // Create payment record (amount = debt.amount, frontend amount IGNORED)
+            if ($fullyPaid) {
+                $debt->setStatus(DebtStatus::Paid);
+            } else {
+                $debt->setStatus(DebtStatus::Partial);
+            }
+
+            // ── 2. FIFO tartibda oylarni yopish ──
+            $monthsClosed = $this->closeMonthsFIFO($debt, $method, $fullyPaid);
+
+            // ── 3. lastPaidPeriod ni yangilash (yopilgan oylar asosida) ──
+            if ($monthsClosed > 0) {
+                $this->updateLastPaidPeriod($debt, $client);
+            }
+
+            // ── 4. Payment record yaratish ──
             $payment = new Payment();
-            $payment->setClient($debt->getClient());
+            $payment->setClient($client);
             $payment->setDebt($debt);
-            $payment->setAmount($debt->getAmount());
+            $payment->setAmount($amount);
+            $payment->setAppliedAmount($actualPayment);
             $payment->setPaymentMethod($method);
             $payment->setPeriod($debt->getLastOverduePeriod());
             $payment->setCreatedBy($actor);
+            
+            $notes = [];
+            if (!$fullyPaid) {
+                $notes[] = sprintf('qisman_tolov: %s/%s', $debt->getPaidAmount(), $debt->getAmount());
+            }
+            if (bccomp($overpayment, '0', 2) > 0) {
+                $notes[] = sprintf('ortiqcha: %s UZS balansga tushdi', $overpayment);
+            }
+            if (!empty($notes)) {
+                $payment->setNotes(implode(' | ', $notes));
+            }
             $this->em->persist($payment);
 
-            // UPSERT CMS for all overdue periods
-            foreach (PeriodRangeIterator::between($debt->getFirstOverduePeriod(), $debt->getLastOverduePeriod()) as $period) {
-                $cms = $this->em->getRepository(ClientMonthlyStatus::class)->findOneBy([
-                    'client' => $debt->getClient(),
-                    'period' => $period,
-                ]);
+            // ── 5. Ortiqcha summa → balansga ──
+            if (bccomp($overpayment, '0', 2) > 0) {
+                $client->addBalance($overpayment);
+                $client->setUpdatedAt(new \DateTimeImmutable());
+            }
 
+            $this->em->flush();
+            $conn->commit();
+
+            // ── 6. Audit log ──
+            $this->auditLogger->log($actor, 'debt.payment', 'debt', $debtId, [
+                'amount_requested' => $amount,
+                'amount_applied' => $actualPayment,
+                'overpayment' => $overpayment,
+                'remaining' => $debt->getRemainingAmount(),
+                'status' => $debt->getStatus()->value,
+                'method' => $method->value,
+                'client_id' => $client->getId(),
+                'months_closed' => $monthsClosed,
+                'fully_paid' => $fullyPaid,
+            ]);
+
+            return [
+                'debt' => $debt,
+                'paid' => $actualPayment,
+                'remaining' => $debt->getRemainingAmount(),
+                'overpayment' => $overpayment,
+                'balance' => $client->getBalance(),
+                'fully_paid' => $fullyPaid,
+                'months_closed' => $monthsClosed,
+            ];
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * FIFO tartibda oylarni yopish.
+     *
+     * Eng eski oydan boshlab, agar to'langan summa butun bir oy narxini
+     * qoplasa — o'sha oy "paid" bo'ladi. To'liq to'langanda barcha oylar yopiladi.
+     *
+     * @return int Yopilgan oylar soni
+     */
+    private function closeMonthsFIFO(Debt $debt, PayMethod $method, bool $fullyPaid): int
+    {
+        $cmsRepo = $this->em->getRepository(ClientMonthlyStatus::class);
+        $monthlyAmount = $debt->getMonthlyAmount();
+        $paidAmount = $debt->getPaidAmount();
+        $now = new \DateTimeImmutable();
+        $monthsClosed = 0;
+
+        // Har bir davr uchun tekshiramiz
+        $coveredAmount = '0.00';
+        foreach (PeriodRangeIterator::between($debt->getFirstOverduePeriod(), $debt->getLastOverduePeriod()) as $period) {
+            $cms = $cmsRepo->findOneBy([
+                'client' => $debt->getClient(),
+                'period' => $period,
+            ]);
+
+            // Allaqachon to'langan oy — o'tkazib yuborish
+            if ($cms !== null && $cms->getPaymentStatus() === PaymentStatus::Paid) {
+                continue;
+            }
+
+            $coveredAmount = bcadd($coveredAmount, $monthlyAmount, 2);
+
+            // To'liq to'langanda barcha oylar yopiladi
+            if ($fullyPaid) {
                 if ($cms === null) {
                     $cms = new ClientMonthlyStatus();
                     $cms->setClient($debt->getClient());
@@ -82,36 +220,67 @@ final class PaymentProcessor
                     $cms->setPaymentTypeSnapshot($debt->getPaymentTypeSnapshot());
                     $this->em->persist($cms);
                 }
-
                 $cms->setPaymentStatus(PaymentStatus::Paid);
                 $cms->setPaymentMethod($method);
                 $cms->setDebt($debt);
-                $cms->setPaidAt(new \DateTimeImmutable());
+                $cms->setPaidAt($now);
+                $monthsClosed++;
+                continue;
             }
 
-            // Update client's last_paid_period to reflect the debt payment
-            $client = $debt->getClient();
-            $debtLastPeriod = $debt->getLastOverduePeriod();
-            if ($client->getLastPaidPeriod() === null || strcmp($debtLastPeriod, $client->getLastPaidPeriod()) > 0) {
-                $client->setLastPaidPeriod($debtLastPeriod);
-                $client->setUpdatedAt(new \DateTimeImmutable());
+            // Qisman to'lov: faqat to'langan summa butun oyni qoplasa
+            if (bccomp($paidAmount, $coveredAmount, 2) >= 0) {
+                if ($cms === null) {
+                    $cms = new ClientMonthlyStatus();
+                    $cms->setClient($debt->getClient());
+                    $cms->setPeriod($period);
+                    $cms->setPaymentTypeSnapshot($debt->getPaymentTypeSnapshot());
+                    $this->em->persist($cms);
+                }
+                $cms->setPaymentStatus(PaymentStatus::Paid);
+                $cms->setPaymentMethod($method);
+                $cms->setDebt($debt);
+                $cms->setPaidAt($now);
+                $monthsClosed++;
+            } else {
+                // Bu oy to'liq qoplanmagan — to'xtaymiz
+                break;
             }
+        }
 
-            $this->em->flush();
-            $conn->commit();
+        return $monthsClosed;
+    }
 
-            $this->auditLogger->log($actor, 'debt.paid', 'debt', $debtId, [
-                'amount' => $debt->getAmount(),
-                'method' => $method->value,
-                'client_id' => $debt->getClient()->getId(),
+    /**
+     * Yopilgan oylar asosida lastPaidPeriod ni yangilash.
+     *
+     * Faqat eng eski oydan ketma-ket yopilgan oylar hisoblanadi — oradagi
+     * "bo'shliq" topilsa, o'sha joyda to'xtaydi.
+     */
+    private function updateLastPaidPeriod(Debt $debt, \App\Entity\Client $client): void
+    {
+        $cmsRepo = $this->em->getRepository(ClientMonthlyStatus::class);
+        $latestPaidPeriod = null;
+
+        foreach (PeriodRangeIterator::between($debt->getFirstOverduePeriod(), $debt->getLastOverduePeriod()) as $period) {
+            $cms = $cmsRepo->findOneBy([
+                'client' => $client,
+                'period' => $period,
             ]);
 
-            return $debt;
-        } catch (\Throwable $e) {
-            if ($conn->isTransactionActive()) {
-                $conn->rollBack();
+            if ($cms !== null && $cms->getPaymentStatus() === PaymentStatus::Paid) {
+                $latestPaidPeriod = $period;
+            } else {
+                // Ketma-ket emas — to'xtash
+                break;
             }
-            throw $e;
+        }
+
+        if ($latestPaidPeriod !== null) {
+            if ($client->getLastPaidPeriod() === null || strcmp($latestPaidPeriod, $client->getLastPaidPeriod()) > 0) {
+                $client->setLastPaidPeriod($latestPaidPeriod);
+                $client->setUpdatedAt(new \DateTimeImmutable());
+            }
         }
     }
 }

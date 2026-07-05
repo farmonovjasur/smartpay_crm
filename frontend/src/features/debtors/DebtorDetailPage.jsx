@@ -18,7 +18,8 @@ export default function DebtorDetailPage() {
   if (isLoading) return <LoadingState />;
   if (isError || !debt) return <ErrorState onRetry={refetch} />;
 
-  const isActive = debt.status === 'active';
+  const isActive = debt.status === 'active' || debt.status === 'partial';
+  const hasPaidAmount = parseFloat(debt.paid_amount) > 0;
 
   return (
     <div className="space-y-6">
@@ -82,12 +83,17 @@ export default function DebtorDetailPage() {
 
           <div className="space-y-1 text-right">
             <span className="text-xs uppercase tracking-wide text-[var(--text-secondary)]">
-              Qarz summasi
+              {isActive ? 'Qolgan qarz' : 'Qarz summasi'}
             </span>
             <p className="text-3xl font-bold text-[var(--text-primary)]">
-              {formatMoney(debt.amount)}{' '}
+              {formatMoney(isActive && hasPaidAmount ? debt.remaining_amount : debt.amount)}{' '}
               <span className="text-base font-medium text-[var(--text-secondary)]">so'm</span>
             </p>
+            {hasPaidAmount && (
+              <p className="text-xs text-success font-medium">
+                To'langan: {formatMoney(debt.paid_amount)} so'm
+              </p>
+            )}
             <p className="text-xs text-[var(--text-secondary)]">
               Oylik: {formatMoney(debt.monthly_amount)} so'm
             </p>
@@ -110,7 +116,17 @@ export default function DebtorDetailPage() {
           {isActive ? (
             <>
               <Row label="To'lov holati" value={<StatusBadge status={debt.status} />} />
-              <Row label="To'lanishi kerak" value={`${formatMoney(debt.amount)} so'm`} mono />
+              <Row label="Umumiy qarz" value={`${formatMoney(debt.amount)} so'm`} mono />
+              {hasPaidAmount && (
+                <>
+                  <Row label="To'langan" value={<span className="text-success font-semibold">{formatMoney(debt.paid_amount)} so'm</span>} />
+                  {debt.paid_at && <Row label="Oxirgi to'lov sanasi" value={formatDate(debt.paid_at)} />}
+                  <Row label="Qolgan qarz" value={`${formatMoney(debt.remaining_amount)} so'm`} mono />
+                </>
+              )}
+              {!hasPaidAmount && (
+                <Row label="To'lanishi kerak" value={`${formatMoney(debt.amount)} so'm`} mono />
+              )}
             </>
           ) : (
             <>
@@ -170,6 +186,14 @@ function StatusBadge({ status }) {
       <span className="inline-flex items-center gap-1 rounded-xl bg-success-bg px-2.5 py-1 text-xs font-medium text-success-text">
         <CheckCircle2 className="h-3.5 w-3.5" />
         To'langan
+      </span>
+    );
+  }
+  if (status === 'partial') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-xl bg-warning-bg px-2.5 py-1 text-xs font-medium text-warning-text">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Qisman to'langan
       </span>
     );
   }
