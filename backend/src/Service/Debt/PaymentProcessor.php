@@ -283,4 +283,71 @@ final class PaymentProcessor
             }
         }
     }
+
+    /**
+     * Mijoz balansidagi pulni qarzga avtomatik yo'naltirish.
+     */
+    public function applyBalanceToDebt(Debt $debt, ?User $actor = null): void
+    {
+        $client = $debt->getClient();
+        $balance = $client->getBalance();
+
+        if (bccomp($balance, '0', 2) <= 0) {
+            return;
+        }
+
+        $remaining = $debt->getRemainingAmount();
+        if (bccomp($remaining, '0', 2) <= 0) {
+            return;
+        }
+
+        $actualPayment = (bccomp($balance, $remaining, 2) >= 0) ? $remaining : $balance;
+        $fullyPaid = bccomp($balance, $remaining, 2) >= 0;
+
+        $method = PayMethod::Naqt;
+
+        $debt->addPaidAmount($actualPayment);
+        $debt->setUpdatedAt(new \DateTimeImmutable());
+        $debt->setPaidAt(new \DateTimeImmutable());
+        $debt->setPaidMethod($method);
+        
+        if ($actor !== null) {
+            $debt->setPaidBy($actor);
+        }
+
+        if ($fullyPaid) {
+            $debt->setStatus(DebtStatus::Paid);
+        } else {
+            $debt->setStatus(DebtStatus::Partial);
+        }
+
+        $monthsClosed = $this->closeMonthsFIFO($debt, $method, $fullyPaid);
+
+        if ($monthsClosed > 0) {
+            $this->updateLastPaidPeriod($debt, $client);
+        }
+
+        $payment = new Payment();
+        $payment->setClient($client);
+        $payment->setDebt($debt);
+        $payment->setAmount($actualPayment);
+        $payment->setAppliedAmount($actualPayment);
+        $payment->setPaymentMethod($method);
+        $payment->setPeriod($debt->getLastOverduePeriod());
+        $payment->setCreatedBy($actor);
+        $payment->setNotes('auto_deduction_from_balance');
+        $this->em->persist($payment);
+
+        $client->deductBalance($actualPayment);
+
+        $this->em->flush();
+
+        $this->auditLogger->log($actor, 'debt.auto_payment', 'debt', $debt->getId(), [
+            'amount_applied' => $actualPayment,
+            'remaining' => $debt->getRemainingAmount(),
+            'status' => $debt->getStatus()->value,
+            'months_closed' => $monthsClosed,
+            'fully_paid' => $fullyPaid,
+        ]);
+    }
 }

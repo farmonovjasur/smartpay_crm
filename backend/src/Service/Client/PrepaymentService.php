@@ -22,6 +22,7 @@ final class PrepaymentService
         private readonly ClientRepository $clientRepository,
         private readonly ConfigService $configService,
         private readonly AuditLogger $auditLogger,
+        private readonly \App\Service\Debt\PaymentProcessor $paymentProcessor,
     ) {
     }
 
@@ -55,6 +56,19 @@ final class PrepaymentService
         $client->setUpdatedAt(new \DateTimeImmutable());
 
         $this->em->flush();
+
+        // Check for active debt and apply balance if needed
+        $activeDebt = $this->em->getRepository(\App\Entity\Debt::class)->findOneBy([
+            'client' => $client,
+            'status' => \App\Enum\DebtStatus::Active,
+        ]) ?? $this->em->getRepository(\App\Entity\Debt::class)->findOneBy([
+            'client' => $client,
+            'status' => \App\Enum\DebtStatus::Partial,
+        ]);
+
+        if ($activeDebt !== null) {
+            $this->paymentProcessor->applyBalanceToDebt($activeDebt, $actor);
+        }
 
         // Audit log
         $unitPrice = $this->configService->get('unit_price');

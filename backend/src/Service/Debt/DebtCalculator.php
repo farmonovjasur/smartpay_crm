@@ -28,6 +28,7 @@ final class DebtCalculator
         private readonly ClientRepository $clientRepository,
         private readonly ConfigService $configService,
         private readonly NotificationService $notificationService,
+        private readonly \App\Service\Debt\PaymentProcessor $paymentProcessor,
     ) {
     }
 
@@ -202,6 +203,12 @@ final class DebtCalculator
                 $debt->setDueDate($today);
                 $this->em->persist($debt);
                 $report->createdCount++;
+            }
+
+            // After debt is created or updated, check if we have any remaining balance to apply
+            $activeDebt = $existingDebt ?? $debt;
+            if ($activeDebt !== null && bccomp($client->getBalance(), '0', 2) > 0) {
+                $this->paymentProcessor->applyBalanceToDebt($activeDebt);
             }
         }
 
