@@ -10,7 +10,7 @@ import { showSuccess } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
 export default function InvoiceDetailPage() {
-  const { id } = useParams({ from: '/invoices/$id' });
+  const { id } = useParams({ strict: false });
   const navigate = useNavigate();
   const { data: invoice, isLoading, isError, refetch } = useInvoice(id);
   const deleteInvoice = useDeleteInvoice();

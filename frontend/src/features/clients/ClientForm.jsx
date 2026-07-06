@@ -117,7 +117,7 @@ export function ClientForm({ open, onOpenChange, client }) {
       <DialogContent className="max-w-[520px] p-0">
         <form onSubmit={handleSubmit(onSubmit)}>
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
+          <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">
               {isEdit ? 'Mijozni tahrirlash' : "Yangi mijoz qo'shish"}
             </h2>
@@ -132,12 +132,12 @@ export function ClientForm({ open, onOpenChange, client }) {
           </div>
 
           {/* Body — kompakt */}
-          <div className="space-y-3 px-5 py-4">
+          <div className="space-y-5 px-6 py-5 max-h-[75vh] overflow-y-auto">
             <Field label="Mijoz nomi" required error={errors.name?.message}>
               <TextInput placeholder="Kompaniya yoki F.I.O" {...register('name', { validate: validate('name') })} />
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="INN" required error={errors.inn?.message}>
                 <TextInput placeholder="123456789" disabled={isEdit} {...register('inn', { validate: validate('inn') })} />
               </Field>
@@ -150,7 +150,7 @@ export function ClientForm({ open, onOpenChange, client }) {
               <TextInput placeholder="+998XXXXXXXXX (ixtiyoriy)" {...register('phone2')} />
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Xizmatga ulangan sana" required error={errors.service_date?.message}>
                 <TextInput type="date" {...register('service_date', { validate: validate('service_date') })} />
               </Field>
@@ -180,7 +180,7 @@ export function ClientForm({ open, onOpenChange, client }) {
                 control={control}
                 name="payment_type"
                 render={({ field }) => (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {PAYMENT_OPTIONS.map((opt) => {
                       const selected = field.value === opt.value;
                       return (
@@ -215,7 +215,7 @@ export function ClientForm({ open, onOpenChange, client }) {
             <Field label="Holat">
               <select
                 {...register('status')}
-                className="h-9 w-full rounded-btn border border-[var(--border)] bg-[var(--card-bg)] px-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+                className="h-10 w-full rounded-btn border border-[var(--border)] bg-[var(--card-bg)] px-3 text-sm outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="faol">Faol</option>
                 <option value="nofaol">Nofaol</option>
@@ -226,7 +226,7 @@ export function ClientForm({ open, onOpenChange, client }) {
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-2 border-t border-[var(--border)] px-5 py-3">
+          <div className="flex justify-end gap-3 border-t border-[var(--border)] px-6 py-4 bg-bg-light/50">
             <button
               type="button"
               onClick={() => onOpenChange(false)}
@@ -266,7 +266,7 @@ const TextInput = forwardRef(function TextInput({ className, ...props }, ref) {
     <input
       ref={ref}
       className={cn(
-        'h-9 w-full rounded-btn border border-[var(--border)] bg-[var(--card-bg)] px-3 text-sm outline-none placeholder:text-[#94A3B8] focus:ring-2 focus:ring-primary disabled:bg-bg-light disabled:opacity-70',
+        'h-10 w-full rounded-btn border border-[var(--border)] bg-[var(--card-bg)] px-3 text-sm outline-none placeholder:text-[#94A3B8] focus:ring-2 focus:ring-primary disabled:bg-bg-light disabled:opacity-70',
         className
       )}
       {...props}

@@ -11,7 +11,7 @@ import { formatDate, formatPeriod } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 export default function DebtorDetailPage() {
-  const { id } = useParams({ from: '/debtors/$id' });
+  const { id } = useParams({ strict: false });
   const { data: debt, isLoading, isError, refetch } = useDebtor(id);
   const [payOpen, setPayOpen] = useState(false);
 
