@@ -1,10 +1,22 @@
-import { History, Banknote, CreditCard, CalendarDays, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { History, Banknote, CreditCard, CalendarDays, AlertTriangle, Download } from 'lucide-react';
 import { usePayments } from './hooks';
 import { formatDate, formatPeriod } from '@/lib/date';
 import { formatMoney } from '@/lib/money';
+import { downloadFile } from '@/lib/download';
 
 export function PaymentHistory({ clientId }) {
   const { data: history = [], isLoading } = usePayments(clientId);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await downloadFile(`/clients/${clientId}/payments/export`, undefined, 'tolovlar_tarixi.xlsx');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -36,10 +48,21 @@ export function PaymentHistory({ clientId }) {
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card-bg)] overflow-hidden">
-      <div className="border-b border-[var(--border)] px-5 py-4">
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
         <h3 className="text-base font-semibold text-[var(--text-primary)]">
           Umumiy to'lovlar tarixi
         </h3>
+        {history.length > 0 && (
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-bg-light px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] disabled:opacity-50"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? 'Yuklanmoqda...' : 'Excel yuklash'}
+          </button>
+        )}
       </div>
       
       <div className="overflow-x-auto">

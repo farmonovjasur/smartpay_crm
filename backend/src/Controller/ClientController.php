@@ -311,4 +311,12 @@ final class ClientController extends AbstractController
 
         return new JsonResponse(['data' => $history]);
     }
+
+    #[Route('/{id}/payments/export', name: 'client_payments_export', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function exportPayments(int $id, \App\Service\Client\PaymentHistoryExporter $exporter): Response
+    {
+        $this->denyAccessUnlessGranted(ClientVoter::VIEW);
+
+        return $exporter->export($id);
+    }
 }
