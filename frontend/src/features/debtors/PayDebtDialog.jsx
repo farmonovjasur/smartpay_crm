@@ -155,7 +155,7 @@ export function PayDebtDialog({ open, onOpenChange, debt }) {
           </div>
 
           {/* Body */}
-          <div className="space-y-5 p-6">
+          <div className="space-y-6 p-6 max-h-[75vh] overflow-y-auto">
             {/* Qarz summasi (read-only) */}
             <div className="rounded-card border border-[var(--border)] bg-bg-light p-4">
               <div className="flex items-center justify-between">
@@ -233,7 +233,7 @@ export function PayDebtDialog({ open, onOpenChange, debt }) {
               )}
 
               {/* Quick fill buttons */}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 mt-2">
                 <QuickFillBtn
                   label={`To'liq: ${formatMoney(remainingAmount)}`}
                   onClick={() => reset((prev) => ({ ...prev, amount: remainingAmount }))}
@@ -310,7 +310,7 @@ export function PayDebtDialog({ open, onOpenChange, debt }) {
                 name="method"
                 rules={{ required: true }}
                 render={({ field }) => (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {METHOD_OPTIONS.map((opt) => {
                       const selected = field.value === opt.value;
                       return (
@@ -355,7 +355,7 @@ export function PayDebtDialog({ open, onOpenChange, debt }) {
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-3 border-t border-[var(--border)] p-6">
+          <div className="flex justify-end gap-3 border-t border-[var(--border)] p-6 bg-bg-light/50">
             <button
               type="button"
               onClick={() => onOpenChange(false)}
@@ -383,10 +383,10 @@ function QuickFillBtn({ label, onClick, active }) {
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+        'rounded-lg px-4 py-2 text-sm font-medium transition-colors',
         active
-          ? 'bg-primary text-white'
-          : 'bg-bg-light text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] border border-[var(--border)]'
+          ? 'bg-primary text-white shadow-sm'
+          : 'bg-[var(--card-bg)] text-[var(--text-secondary)] hover:bg-bg-light border border-[var(--border)]'
       )}
     >
       {label}
