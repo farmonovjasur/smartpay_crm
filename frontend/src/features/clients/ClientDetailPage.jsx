@@ -10,7 +10,6 @@ import { useClient } from './hooks';
 import { ClientForm } from './ClientForm';
 import { MarkMonthlyPaidDialog } from './MarkMonthlyPaidDialog';
 import { PrepayDialog } from './PrepayDialog';
-import { PrepaymentHistory } from './PrepaymentHistory';
 import { PaymentHistory } from './PaymentHistory';
 import { formatDate, formatPeriod } from '@/lib/date';
 import { formatMoney } from '@/lib/money';
@@ -163,7 +162,6 @@ export default function ClientDetailPage() {
       {/* Payment and Prepayment Histories */}
       <div className="space-y-6">
         <PaymentHistory clientId={id} />
-        <PrepaymentHistory clientId={id} />
       </div>
 
       {/* Dialoglar */}

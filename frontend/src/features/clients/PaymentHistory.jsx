@@ -1,13 +1,24 @@
-import { useState } from 'react';
-import { History, Banknote, CreditCard, CalendarDays, AlertTriangle, Download } from 'lucide-react';
-import { usePayments } from './hooks';
+import { useState, useMemo } from 'react';
+import { History, Banknote, CreditCard, CalendarDays, AlertTriangle, Download, Wallet } from 'lucide-react';
+import { usePayments, usePrepayments } from './hooks';
 import { formatDate, formatPeriod } from '@/lib/date';
 import { formatMoney } from '@/lib/money';
 import { downloadFile } from '@/lib/download';
 
 export function PaymentHistory({ clientId }) {
-  const { data: history = [], isLoading } = usePayments(clientId);
+  const { data: payments = [], isLoading: pLoading } = usePayments(clientId);
+  const { data: prepayments = [], isLoading: prLoading } = usePrepayments(clientId);
   const [exporting, setExporting] = useState(false);
+
+  const isLoading = pLoading || prLoading;
+
+  const history = useMemo(() => {
+    const combined = [
+      ...payments.map(p => ({ ...p, _type: 'payment' })),
+      ...prepayments.map(p => ({ ...p, _type: 'prepayment' }))
+    ];
+    return combined.sort((a, b) => new Date(b.paid_at) - new Date(a.paid_at));
+  }, [payments, prepayments]);
 
   async function handleExport() {
     setExporting(true);
@@ -70,7 +81,7 @@ export function PaymentHistory({ clientId }) {
           <thead className="bg-bg-light text-[var(--text-secondary)]">
             <tr>
               <th className="px-5 py-3 font-medium">Sana</th>
-              <th className="px-5 py-3 font-medium">Davr</th>
+              <th className="px-5 py-3 font-medium">Davr / Izoh</th>
               <th className="px-5 py-3 font-medium">Summa</th>
               <th className="px-5 py-3 font-medium">Turi</th>
               <th className="px-5 py-3 font-medium">Usul</th>
@@ -79,33 +90,31 @@ export function PaymentHistory({ clientId }) {
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
             {history.map((row) => (
-              <tr key={row.id} className="hover:bg-bg-light/50">
+              <tr key={`${row._type}-${row.id}`} className="hover:bg-bg-light/50">
                 <td className="px-5 py-3 text-[var(--text-primary)] whitespace-nowrap">
                   {formatDate(row.paid_at)}
                 </td>
                 <td className="px-5 py-3 font-medium text-[var(--text-primary)] whitespace-nowrap">
-                  {formatPeriod(row.period)}
+                  {row._type === 'payment' ? formatPeriod(row.period) : (row.notes || '-')}
                 </td>
                 <td className="px-5 py-3 whitespace-nowrap">
                   <div className="flex flex-col">
-                    {row.applied_amount && parseFloat(row.amount) !== parseFloat(row.applied_amount) ? (
-                      <>
-                        <span className="text-[var(--text-secondary)] text-xs font-normal">
-                          Kiritildi: {formatMoney(row.amount)} UZS
-                        </span>
-                        <span className="text-success-text font-semibold mt-0.5">
-                          Yechildi: {formatMoney(row.applied_amount)} UZS
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-success-text font-semibold">
-                        {formatMoney(row.amount)} UZS
-                      </span>
-                    )}
+                    <span className="text-[var(--text-secondary)] text-xs font-normal">
+                      Kiritildi: {formatMoney(row.amount)} UZS
+                    </span>
+                    <span className="text-success-text font-semibold mt-0.5">
+                      {row._type === 'prepayment' ? 'Balansga: ' : 'Yechildi: '}
+                      {formatMoney(row._type === 'prepayment' ? row.amount : (row.applied_amount || row.amount))} UZS
+                    </span>
                   </div>
                 </td>
                 <td className="px-5 py-3 whitespace-nowrap">
-                  {row.is_debt ? (
+                  {row._type === 'prepayment' ? (
+                    <div className="inline-flex items-center gap-1.5 rounded-md bg-teal-bg px-2 py-1 text-xs font-medium text-teal">
+                      <Wallet className="h-3.5 w-3.5" />
+                      Oldindan to'lov
+                    </div>
+                  ) : row.is_debt ? (
                     <div className="inline-flex items-center gap-1.5 rounded-md bg-warning-bg px-2 py-1 text-xs font-medium text-warning-text">
                       <AlertTriangle className="h-3.5 w-3.5" />
                       Qarz to'lovi
