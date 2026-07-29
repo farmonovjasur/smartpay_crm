@@ -86,8 +86,8 @@ final class InvoiceXlsxRenderer
         $this->applyMergedCells($sheet);
         $this->applyHeaderStyles($sheet);
 
-        // ─── Write data rows starting at row 10 ───
-        $faktItems = $this->filterFaktItems($invoice);
+        // Write data rows starting at row 10 (grouped by customer INN)
+        $faktGroups = $this->groupFaktItemsByInn($invoice);
 
         // Birlik narx — config'dan (talabga ko'ra barcha mijoz uchun bir xil: 1 dona = 100 000)
         $unitPriceInt = (int) round((float) $this->configService->get('unit_price'));
@@ -100,12 +100,11 @@ final class InvoiceXlsxRenderer
 
         $dataRow = 10;
         $index = 1;
-        foreach ($faktItems as $item) {
-            $client = $item->getClient();
-            $quantity = $item->getQuantity();                         // Col52: mijozga qarab o'zgaradi
+        foreach ($faktGroups as $group) {
+            $quantity = $group['quantity'];                           // Col52: INN bo'yicha jami mahsulot soni
             $totalPrice = $unitPriceInt * $quantity;                  // Col56: umumiy narx = soni × narx
             
-            $itemInvoiceNumber = $invoicePrefix . $item->getId();
+            $itemInvoiceNumber = $invoicePrefix . $group['firstItemId'];
 
             $rowData = [
                 1  => (string) $index,                               // п.п. — tartib raqami
@@ -117,12 +116,12 @@ final class InvoiceXlsxRenderer
                 14 => '312101469',                                   // Seller INN — 312101469
                 24 => $responsibleName,                              // Direktor — BARCHA uchun bir xil
                 25 => $responsibleName,                              // Bosh hisobchi — BARCHA uchun bir xil
-                28 => $item->getClientInnSnapshot(),                 // Mijoz INN — MIJOZGA qarab
+                28 => $group['inn'],                                 // Mijoz INN — har bir INN faqat 1 marta keladi
                 41 => '1',                                           // Tovar p.p. — BARCHA uchun bir xil
                 45 => $productName,                                  // Tovar nomi — BARCHA uchun bir xil (oy/yil o'zgaradi)
                 46 => '11303015001000000',                           // IKPU — 11303015001000000
                 49 => '1504666',                                     // O'lchov birligi — 1504666
-                52 => (string) $quantity,                            // Soni — MIJOZGA qarab
+                52 => (string) $quantity,                            // Soni — INN bo'yicha jami
                 53 => (string) $unitPriceInt,                        // 1 dona narx — BARCHA uchun bir xil (100000)
                 56 => (string) $totalPrice,                          // Umumiy narx — soni × narx
                 57 => 'Без НДС',                                     // NDS — BARCHA uchun bir xil
@@ -176,17 +175,31 @@ final class InvoiceXlsxRenderer
     }
 
     /**
-     * @return InvoiceItem[]
+     * Group fakt items by customer INN to ensure unique INN rows in Excel export.
+     *
+     * @return array<int, array{inn: string, quantity: int, firstItemId: int}>
      */
-    private function filterFaktItems(Invoice $invoice): array
+    private function groupFaktItemsByInn(Invoice $invoice): array
     {
-        $items = [];
+        $grouped = [];
         foreach ($invoice->getItems() as $item) {
-            if ($item->getPaymentTypeSnapshot() === PaymentType::Fakt) {
-                $items[] = $item;
+            if ($item->getPaymentTypeSnapshot() !== PaymentType::Fakt) {
+                continue;
             }
+
+            $inn = $item->getClientInnSnapshot();
+            if (!isset($grouped[$inn])) {
+                $grouped[$inn] = [
+                    'inn' => $inn,
+                    'quantity' => 0,
+                    'firstItemId' => $item->getId(),
+                ];
+            }
+
+            $grouped[$inn]['quantity'] += $item->getQuantity();
         }
-        return $items;
+
+        return array_values($grouped);
     }
 
     private function setColumnWidths($sheet): void
