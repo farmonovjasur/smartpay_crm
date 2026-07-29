@@ -102,9 +102,23 @@ export function ClientForm({ open, onOpenChange, client }) {
         handleMutationError(err, {
           setError,
           fields: FIELDS,
-          conflictField: 'inn',
           statusMessages: {
-            409: 'Bu INN bilan mijoz allaqachon mavjud',
+            409: (err) => {
+              const msg = err?.response?.data?.message || '';
+              if (/name/i.test(msg)) {
+                setError('name', { message: 'Bu nom bilan mijoz allaqachon mavjud' });
+                return null;
+              }
+              if (/phone/i.test(msg)) {
+                setError('phone', { message: 'Bu telefon raqamli mijoz allaqachon mavjud' });
+                return null;
+              }
+              if (/inn/i.test(msg)) {
+                setError('inn', { message: 'Bu INN bilan mijoz allaqachon mavjud' });
+                return null;
+              }
+              return 'Bu ma\'lumotlar bilan mijoz allaqachon mavjud';
+            },
           },
         }),
     });

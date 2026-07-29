@@ -62,6 +62,8 @@ final class ClientImporter
 
         $result = new ImportResult();
         $seenInns = [];
+        $seenNames = [];
+        $seenPhones = [];
 
         // Header is on row index 2 (Excel row 3). Data starts at index 3.
         for ($i = 3, $count = count($rows); $i < $count; $i++) {
@@ -81,21 +83,33 @@ final class ClientImporter
             }
 
             $inn = $parsed['data']['inn'];
+            $nameKey = mb_strtolower(trim($parsed['data']['name']));
+            $phone = trim($parsed['data']['phone']);
 
-            // Check duplicates within file
-            if (isset($seenInns[$inn])) {
-                $result->duplicateRows[] = ['row' => $i + 1, 'inn' => $inn];
-                continue;
-            }
-
-            // Check DB duplicates
-            if ($this->clientRepository->findOneAliveByInn($inn) !== null) {
-                $result->duplicateRows[] = ['row' => $i + 1, 'inn' => $inn];
+            // Check INN duplicates within file or DB
+            if (isset($seenInns[$inn]) || $this->clientRepository->findOneAliveByInn($inn) !== null) {
+                $result->duplicateRows[] = ['row' => $i + 1, 'inn' => $inn, 'reason' => 'INN duplicate'];
                 $seenInns[$inn] = true;
                 continue;
             }
 
+            // Check Name duplicates within file or DB
+            if (isset($seenNames[$nameKey]) || $this->clientRepository->findOneAliveByName($parsed['data']['name']) !== null) {
+                $result->duplicateRows[] = ['row' => $i + 1, 'inn' => $inn, 'reason' => 'Name duplicate'];
+                $seenNames[$nameKey] = true;
+                continue;
+            }
+
+            // Check Phone duplicates within file or DB
+            if (isset($seenPhones[$phone]) || $this->clientRepository->findOneAliveByPhone($phone) !== null) {
+                $result->duplicateRows[] = ['row' => $i + 1, 'inn' => $inn, 'reason' => 'Phone duplicate'];
+                $seenPhones[$phone] = true;
+                continue;
+            }
+
             $seenInns[$inn] = true;
+            $seenNames[$nameKey] = true;
+            $seenPhones[$phone] = true;
 
             if (!$dryRun) {
                 $client = new Client();

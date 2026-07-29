@@ -30,6 +30,31 @@ class ClientRepository extends ServiceEntityRepository
             ->getOneOrNullResult();
     }
 
+    public function findOneAliveByName(string $name): ?Client
+    {
+        return $this->createQueryBuilder('c')
+            ->andWhere('LOWER(TRIM(c.name)) = LOWER(TRIM(:name))')
+            ->setParameter('name', $name)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    public function findOneAliveByPhone(string $phone): ?Client
+    {
+        if (trim($phone) === '') {
+            return null;
+        }
+
+        return $this->createQueryBuilder('c')
+            ->andWhere('c.phone = :phone OR c.phone2 = :phone')
+            ->setParameter('phone', trim($phone))
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+
     /**
      * Active fakt clients without an invoice for the given period.
      * @return Client[]

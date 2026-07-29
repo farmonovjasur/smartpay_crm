@@ -42,6 +42,14 @@ final class ClientService
             throw new ConflictHttpException('INN already exists.');
         }
 
+        if ($this->clientRepository->findOneAliveByName($in->name) !== null) {
+            throw new ConflictHttpException('Client name already exists.');
+        }
+
+        if ($this->clientRepository->findOneAliveByPhone($in->phone) !== null || ($in->phone2 !== null && $this->clientRepository->findOneAliveByPhone($in->phone2) !== null)) {
+            throw new ConflictHttpException('Phone number already exists.');
+        }
+
         $client = new Client();
         $client->setInn($in->inn);
         $client->setName($in->name);
@@ -81,6 +89,23 @@ final class ClientService
 
         if ($client->getInn() !== $in->inn && $this->clientRepository->findOneAliveByInn($in->inn) !== null) {
             throw new ConflictHttpException('INN already exists.');
+        }
+
+        $existingName = $this->clientRepository->findOneAliveByName($in->name);
+        if ($existingName !== null && $existingName->getId() !== $id) {
+            throw new ConflictHttpException('Client name already exists.');
+        }
+
+        $existingPhone = $this->clientRepository->findOneAliveByPhone($in->phone);
+        if ($existingPhone !== null && $existingPhone->getId() !== $id) {
+            throw new ConflictHttpException('Phone number already exists.');
+        }
+
+        if ($in->phone2 !== null && trim($in->phone2) !== '') {
+            $existingPhone2 = $this->clientRepository->findOneAliveByPhone($in->phone2);
+            if ($existingPhone2 !== null && $existingPhone2->getId() !== $id) {
+                throw new ConflictHttpException('Phone number already exists.');
+            }
         }
 
         $newServiceDate = new \DateTimeImmutable($in->serviceDate);
