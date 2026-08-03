@@ -591,7 +591,7 @@ final class ClientService
      */
     private function computeLastOverduePeriod(\DateTimeImmutable $today, \DateTimeImmutable $serviceDate): string
     {
-        return $today->modify('-1 month')->format('Y-m');
+        return $today->format('Y-m');
     }
 
     private function nextPeriodAfter(string $period): string

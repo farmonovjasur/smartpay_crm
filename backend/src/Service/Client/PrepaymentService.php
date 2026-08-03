@@ -31,60 +31,72 @@ final class PrepaymentService
      */
     public function deposit(int $clientId, string $amount, PayMethod $method, ?string $notes, User $actor): Prepayment
     {
-        $client = $this->clientRepository->find($clientId);
-        if ($client === null) {
-            throw new NotFoundHttpException('Client not found.');
+        $conn = $this->em->getConnection();
+        $conn->beginTransaction();
+        try {
+            // Lock client for update
+            $client = $this->em->find(Client::class, $clientId, \Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE);
+            
+            if ($client === null) {
+                throw new NotFoundHttpException('Client not found.');
+            }
+
+            if (bccomp($amount, '0', 2) <= 0) {
+                throw new UnprocessableEntityHttpException("Summa musbat son bo'lishi kerak.");
+            }
+
+            // Create prepayment record
+            $prepayment = new Prepayment();
+            $prepayment->setClient($client);
+            $prepayment->setAmount($amount);
+            $prepayment->setMethod($method);
+            $prepayment->setPaidAt(new \DateTimeImmutable());
+            $prepayment->setNotes($notes);
+            $prepayment->setCreatedBy($actor);
+
+            $this->em->persist($prepayment);
+
+            // Add to client balance
+            $client->addBalance($amount);
+            $client->setUpdatedAt(new \DateTimeImmutable());
+
+            $this->em->flush();
+
+            // Check for active debt and apply balance if needed
+            $activeDebt = $this->em->getRepository(\App\Entity\Debt::class)->findOneBy([
+                'client' => $client,
+                'status' => \App\Enum\DebtStatus::Active,
+            ]) ?? $this->em->getRepository(\App\Entity\Debt::class)->findOneBy([
+                'client' => $client,
+                'status' => \App\Enum\DebtStatus::Partial,
+            ]);
+
+            if ($activeDebt !== null) {
+                // Lock debt explicitly before modifying
+                $this->em->lock($activeDebt, \Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE);
+                $this->paymentProcessor->applyBalanceToDebt($activeDebt, $actor);
+            }
+
+            // Audit log
+            $unitPrice = $this->configService->get('unit_price');
+            $monthlyAmount = bcmul($unitPrice, (string) $client->getProductCount(), 2);
+            $estimatedMonths = $monthlyAmount !== '0.00'
+                ? (int) bcdiv($client->getBalance(), $monthlyAmount, 0)
+                : 0;
+
+            $this->auditLogger->log($actor, 'client.prepayment', 'client', $clientId, [
+                'amount' => $amount,
+                'method' => $method->value,
+                'new_balance' => $client->getBalance(),
+                'estimated_months' => $estimatedMonths,
+            ]);
+
+            $conn->commit();
+            return $prepayment;
+        } catch (\Throwable $e) {
+            $conn->rollBack();
+            throw $e;
         }
-
-        if (bccomp($amount, '0', 2) <= 0) {
-            throw new UnprocessableEntityHttpException("Summa musbat son bo'lishi kerak.");
-        }
-
-        // Create prepayment record
-        $prepayment = new Prepayment();
-        $prepayment->setClient($client);
-        $prepayment->setAmount($amount);
-        $prepayment->setMethod($method);
-        $prepayment->setPaidAt(new \DateTimeImmutable());
-        $prepayment->setNotes($notes);
-        $prepayment->setCreatedBy($actor);
-
-        $this->em->persist($prepayment);
-
-        // Add to client balance
-        $client->addBalance($amount);
-        $client->setUpdatedAt(new \DateTimeImmutable());
-
-        $this->em->flush();
-
-        // Check for active debt and apply balance if needed
-        $activeDebt = $this->em->getRepository(\App\Entity\Debt::class)->findOneBy([
-            'client' => $client,
-            'status' => \App\Enum\DebtStatus::Active,
-        ]) ?? $this->em->getRepository(\App\Entity\Debt::class)->findOneBy([
-            'client' => $client,
-            'status' => \App\Enum\DebtStatus::Partial,
-        ]);
-
-        if ($activeDebt !== null) {
-            $this->paymentProcessor->applyBalanceToDebt($activeDebt, $actor);
-        }
-
-        // Audit log
-        $unitPrice = $this->configService->get('unit_price');
-        $monthlyAmount = bcmul($unitPrice, (string) $client->getProductCount(), 2);
-        $estimatedMonths = $monthlyAmount !== '0.00'
-            ? (int) bcdiv($client->getBalance(), $monthlyAmount, 0)
-            : 0;
-
-        $this->auditLogger->log($actor, 'client.prepayment', 'client', $clientId, [
-            'amount' => $amount,
-            'method' => $method->value,
-            'new_balance' => $client->getBalance(),
-            'estimated_months' => $estimatedMonths,
-        ]);
-
-        return $prepayment;
     }
 
     /**

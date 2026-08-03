@@ -119,16 +119,7 @@ final class PaymentProcessor
                 $this->updateLastPaidPeriod($debt, $client);
             }
 
-            // ── 4. Payment record yaratish ──
-            $payment = new Payment();
-            $payment->setClient($client);
-            $payment->setDebt($debt);
-            $payment->setAmount($amount);
-            $payment->setAppliedAmount($actualPayment);
-            $payment->setPaymentMethod($method);
-            $payment->setPeriod($debt->getLastOverduePeriod());
-            $payment->setCreatedBy($actor);
-            
+            // ── 4. Payment record yaratish (taqsimlangan) ──
             $notes = [];
             if (!$fullyPaid) {
                 $notes[] = sprintf('qisman_tolov: %s/%s', $debt->getPaidAmount(), $debt->getAmount());
@@ -136,15 +127,22 @@ final class PaymentProcessor
             if (bccomp($overpayment, '0', 2) > 0) {
                 $notes[] = sprintf('ortiqcha: %s UZS balansga tushdi', $overpayment);
             }
-            if (!empty($notes)) {
-                $payment->setNotes(implode(' | ', $notes));
-            }
-            $this->em->persist($payment);
+            $notesStr = empty($notes) ? null : implode(' | ', $notes);
+            $this->createDistributedPayments($debt, $actualPayment, $method, $actor, $notesStr);
 
             // ── 5. Ortiqcha summa → balansga ──
             if (bccomp($overpayment, '0', 2) > 0) {
                 $client->addBalance($overpayment);
                 $client->setUpdatedAt(new \DateTimeImmutable());
+                
+                $prepayment = new \App\Entity\Prepayment();
+                $prepayment->setClient($client);
+                $prepayment->setAmount($overpayment);
+                $prepayment->setMethod($method);
+                $prepayment->setPaidAt(new \DateTimeImmutable());
+                $prepayment->setNotes('qarzdan_ortiqcha_tolov');
+                $prepayment->setCreatedBy($actor);
+                $this->em->persist($prepayment);
             }
 
             $this->em->flush();
@@ -327,16 +325,7 @@ final class PaymentProcessor
             $this->updateLastPaidPeriod($debt, $client);
         }
 
-        $payment = new Payment();
-        $payment->setClient($client);
-        $payment->setDebt($debt);
-        $payment->setAmount($actualPayment);
-        $payment->setAppliedAmount($actualPayment);
-        $payment->setPaymentMethod($method);
-        $payment->setPeriod($debt->getLastOverduePeriod());
-        $payment->setCreatedBy($actor);
-        $payment->setNotes('auto_deduction_from_balance');
-        $this->em->persist($payment);
+        $this->createDistributedPayments($debt, $actualPayment, $method, $actor, 'auto_deduction_from_balance');
 
         $client->deductBalance($actualPayment);
 
@@ -349,5 +338,46 @@ final class PaymentProcessor
             'months_closed' => $monthsClosed,
             'fully_paid' => $fullyPaid,
         ]);
+    }
+
+    private function createDistributedPayments(Debt $debt, string $actualPayment, PayMethod $method, ?User $actor, ?string $notes): void
+    {
+        if (bccomp($actualPayment, '0', 2) <= 0) {
+            return;
+        }
+
+        $monthlyAmount = $debt->getMonthlyAmount();
+        $oldPaidAmount = bcsub($debt->getPaidAmount(), $actualPayment, 2);
+        $remainingToDistribute = $actualPayment;
+
+        foreach (\App\Service\Util\PeriodRangeIterator::between($debt->getFirstOverduePeriod(), $debt->getLastOverduePeriod()) as $period) {
+            if (bccomp($remainingToDistribute, '0', 2) <= 0) {
+                break;
+            }
+
+            if (bccomp($oldPaidAmount, $monthlyAmount, 2) >= 0) {
+                $oldPaidAmount = bcsub($oldPaidAmount, $monthlyAmount, 2);
+                continue;
+            }
+
+            $monthRemaining = bcsub($monthlyAmount, $oldPaidAmount, 2);
+            $oldPaidAmount = '0.00';
+
+            $appliedToThisMonth = (bccomp($remainingToDistribute, $monthRemaining, 2) >= 0) ? $monthRemaining : $remainingToDistribute;
+            $remainingToDistribute = bcsub($remainingToDistribute, $appliedToThisMonth, 2);
+
+            $payment = new Payment();
+            $payment->setClient($debt->getClient());
+            $payment->setDebt($debt);
+            $payment->setAmount($appliedToThisMonth);
+            $payment->setAppliedAmount($appliedToThisMonth);
+            $payment->setPaymentMethod($method);
+            $payment->setPeriod($period);
+            $payment->setCreatedBy($actor);
+            if ($notes !== null) {
+                $payment->setNotes($notes);
+            }
+            $this->em->persist($payment);
+        }
     }
 }
