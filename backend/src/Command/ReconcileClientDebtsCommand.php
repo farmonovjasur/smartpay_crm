@@ -111,6 +111,9 @@ final class ReconcileClientDebtsCommand extends Command
             $existing = $debtRepo->findOneBy([
                 'client' => $client,
                 'status' => DebtStatus::Active,
+            ]) ?? $debtRepo->findOneBy([
+                'client' => $client,
+                'status' => DebtStatus::Partial,
             ]);
 
             if ($existing !== null) {

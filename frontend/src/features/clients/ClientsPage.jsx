@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link, useSearch, useNavigate } from '@tanstack/react-router';
 import { Plus, Search, Upload, Download, ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { Pagination, PageHeader, ErrorState, ConfirmDialog, RoleGate } from '@/components/common';
@@ -48,7 +48,14 @@ export default function ClientsPage() {
   const { data, isLoading, isError, refetch } = useClients(filters);
   const deleteClient = useDeleteClient();
 
-  function handleSearchChange(v) { setSearchInput(v); updateSearch({ search: v, page: 1 }); }
+  function handleSearchChange(v) { setSearchInput(v); }
+
+  useEffect(() => {
+    if (debouncedSearch !== (searchParams.search || '')) {
+      updateSearch({ search: debouncedSearch || undefined, page: 1 });
+    }
+  }, [debouncedSearch]);
+
   function handleFilterChange(key) { return (e) => { updateSearch({ [key]: e.target.value, page: 1 }); }; }
 
   function openCreate() { setEditClient(null); setFormOpen(true); }

@@ -34,7 +34,7 @@ final class DashboardService
         // Total debt amount from debts table (for financial reporting).
         // Note: if debts table is stale (cron missed), this may undercount
         // but debtorsCount above is always correct.
-        $totalDebt = $conn->fetchOne("SELECT COALESCE(SUM(amount), '0.00') FROM debts WHERE status='active'");
+        $totalDebt = $conn->fetchOne("SELECT COALESCE(SUM(amount - paid_amount), '0.00') FROM debts WHERE status IN ('active', 'partial')");
 
         $invoicesThisMonth = (int) $conn->fetchOne(
             "SELECT COUNT(*) FROM invoices WHERE period = ? AND deleted_at IS NULL",
@@ -61,13 +61,17 @@ final class DashboardService
              FROM clients WHERE status='faol' AND deleted_at IS NULL"
         );
 
-        // Debtors breakdown by payment_type_snapshot
         $debtorsBreakdown = $conn->fetchAssociative(
             "SELECT 
-                COALESCE(SUM(payment_type_snapshot='fakt'), 0) AS fromFakt,
-                COALESCE(SUM(payment_type_snapshot='naqt'), 0) AS fromNaqt,
-                COALESCE(SUM(payment_type_snapshot='qarz'), 0) AS fromQarz
-             FROM debts WHERE status='active'"
+                COALESCE(SUM(payment_type='fakt'), 0) AS fromFakt,
+                COALESCE(SUM(payment_type='naqt'), 0) AS fromNaqt,
+                COALESCE(SUM(payment_type='qarz'), 0) AS fromQarz
+             FROM clients 
+             WHERE status = 'faol'
+               AND deleted_at IS NULL
+               AND last_paid_period IS NOT NULL
+               AND last_paid_period < ?",
+            [$currentPeriod]
         );
 
         return [

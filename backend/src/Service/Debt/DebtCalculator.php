@@ -36,7 +36,7 @@ final class DebtCalculator
     {
         $report = new DetectionReport();
 
-        $currentPeriod = $today->format('Y-m');
+        $currentPeriod = $today->modify('-1 month')->format('Y-m');
         $unitPrice = $this->configService->get('unit_price');
 
         // Find ALL active clients whose lastPaidPeriod < currentPeriod (i.e. they haven't paid this month yet)
@@ -69,7 +69,7 @@ final class DebtCalculator
 
     public function detectForClient(Client $client, \DateTimeImmutable $today, ?DetectionReport $report = null): void
     {
-        $currentPeriod = $today->format('Y-m');
+        $currentPeriod = $today->modify('-1 month')->format('Y-m');
         $unitPrice = $this->configService->get('unit_price');
         $cmsRepo = $this->em->getRepository(ClientMonthlyStatus::class);
         $debtRepo = $this->em->getRepository(Debt::class);

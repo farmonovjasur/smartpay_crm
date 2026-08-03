@@ -258,9 +258,9 @@ final class DebtExporter
             ->select('d')
             ->from(Debt::class, 'd')
             ->where('d.client IN (:ids)')
-            ->andWhere('d.status = :status')
+            ->andWhere('d.status IN (:statuses)')
             ->setParameter('ids', $clientIds)
-            ->setParameter('status', DebtStatus::Active)
+            ->setParameter('statuses', [DebtStatus::Active, DebtStatus::Partial])
             ->getQuery()
             ->getResult();
 
