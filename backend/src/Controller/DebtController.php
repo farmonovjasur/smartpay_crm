@@ -170,6 +170,35 @@ final class DebtController extends AbstractController
         ]]);
     }
 
+    #[Route('/client/{clientId}/pay', name: 'debtor_pay_by_client', methods: ['POST'], requirements: ['clientId' => '\d+'])]
+    public function payByClient(
+        int $clientId,
+        Request $request,
+        \App\Service\Debt\DebtCalculator $calculator,
+        \App\Repository\ClientRepository $clientRepo
+    ): JsonResponse {
+        $client = $clientRepo->find($clientId);
+        if (!$client) {
+            throw new NotFoundHttpException('Client not found.');
+        }
+
+        // Generate the debt dynamically for this specific client to ensure we have a Debt record
+        $calculator->detectForClient($client, new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tashkent')));
+        $this->em->flush(); // flush the changes made by detectForClient
+
+        // Find the created or existing debt
+        $debt = $this->em->getRepository(Debt::class)->findOneBy([
+            'client' => $client,
+            'status' => [\App\Enum\DebtStatus::Active, \App\Enum\DebtStatus::Partial]
+        ]);
+
+        if (!$debt) {
+            return new JsonResponse(['error' => "Qarz topilmadi yoki mijoz balansi orqali yopildi."], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        return $this->pay($debt->getId(), $request);
+    }
+
     #[Route('/{id}/pay', name: 'debtor_pay', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function pay(int $id, Request $request): JsonResponse
     {

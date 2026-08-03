@@ -45,7 +45,7 @@ const MIN_AMOUNT = 1000;
  * }} props
  */
 export function PayDebtDialog({ open, onOpenChange, debt }) {
-  const mutation = usePayDebt(debt?.id);
+  const mutation = usePayDebt(debt?.id, debt?.client_id);
 
   // Default method — qarz `payment_type_snapshot` ga qarab.
   const defaultMethod = debt?.payment_type_snapshot === 'naqt' ? 'naqt' : 'fakt';

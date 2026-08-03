@@ -28,10 +28,10 @@ export function useDebtor(id) {
   });
 }
 
-export function usePayDebt(id) {
+export function usePayDebt(id, clientId) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => debtorsApi.pay(id, body),
+    mutationFn: (body) => debtorsApi.pay(id, clientId, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all });
       qc.invalidateQueries({ queryKey: KEYS.detail(id) });

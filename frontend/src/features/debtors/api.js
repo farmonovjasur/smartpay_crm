@@ -31,6 +31,11 @@ export function normalizeDebt(d) {
 export const debtorsApi = {
   list: (filters) => api.get('/debtors', { params: buildListParams(filters) }).then((r) => r.data),
   get: (id) => api.get(`/debtors/${id}`).then((r) => r.data),
-  pay: (id, body) => api.post(`/debtors/${id}/pay`, body).then((r) => r.data),
+  pay: (id, clientId, body) => {
+    if (id) {
+      return api.post(`/debtors/${id}/pay`, body).then((r) => r.data);
+    }
+    return api.post(`/debtors/client/${clientId}/pay`, body).then((r) => r.data);
+  },
 };
 

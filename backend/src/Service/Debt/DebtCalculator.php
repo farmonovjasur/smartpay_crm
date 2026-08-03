@@ -54,7 +54,29 @@ final class DebtCalculator
 
         foreach ($clients as $client) {
             /** @var Client $client */
+            $this->detectForClient($client, $today, $report);
+        }
+
+        $this->em->flush();
+
+        // Notify admins if new debtors detected
+        if ($report->createdCount > 0 || $report->incrementedCount > 0) {
+            $this->notifyAdmins($report, $today);
+        }
+
+        return $report;
+    }
+
+    public function detectForClient(Client $client, \DateTimeImmutable $today, ?DetectionReport $report = null): void
+    {
+        $currentPeriod = $today->format('Y-m');
+        $unitPrice = $this->configService->get('unit_price');
+        $cmsRepo = $this->em->getRepository(ClientMonthlyStatus::class);
+        $debtRepo = $this->em->getRepository(Debt::class);
+
+        if ($report !== null) {
             $report->processedClientsCount++;
+        }
 
             $lastPaid = $client->getLastPaidPeriod();
             $firstOverdue = (\DateTimeImmutable::createFromFormat('Y-m-d', $lastPaid . '-01'))
@@ -104,7 +126,9 @@ final class DebtCalculator
                     $client->setLastPaidPeriod($period);
                     $client->setUpdatedAt(new \DateTimeImmutable());
                     $balanceDeductedUpTo = $period;
-                    $report->balanceDeductedCount = ($report->balanceDeductedCount ?? 0) + 1;
+                    if ($report !== null) {
+                        $report->balanceDeductedCount = ($report->balanceDeductedCount ?? 0) + 1;
+                    }
                     continue;
                 }
 
@@ -124,7 +148,7 @@ final class DebtCalculator
                     $existingDebt->setPaidMethod(PayMethod::Naqt);
                     $existingDebt->setUpdatedAt(new \DateTimeImmutable());
                 }
-                continue;
+                return;
             }
 
             // Count remaining unpaid months
@@ -153,7 +177,7 @@ final class DebtCalculator
             }
 
             if ($monthsOverdue === 0) {
-                continue;
+                return;
             }
 
             $totalAmount = bcmul($monthlyAmount, (string) $monthsOverdue, 2);
@@ -189,7 +213,9 @@ final class DebtCalculator
                 $existingDebt->setPaymentTypeSnapshot($client->getPaymentType());
                 $existingDebt->setDueDate($today);
                 $existingDebt->setUpdatedAt(new \DateTimeImmutable());
-                $report->incrementedCount++;
+                if ($report !== null) {
+                    $report->incrementedCount++;
+                }
             } else {
                 // Create new debt
                 $debt = new Debt();
@@ -202,7 +228,9 @@ final class DebtCalculator
                 $debt->setPaymentTypeSnapshot($client->getPaymentType());
                 $debt->setDueDate($today);
                 $this->em->persist($debt);
-                $report->createdCount++;
+                if ($report !== null) {
+                    $report->createdCount++;
+                }
             }
 
             // After debt is created or updated, check if we have any remaining balance to apply
@@ -210,16 +238,6 @@ final class DebtCalculator
             if ($activeDebt !== null && bccomp($client->getBalance(), '0', 2) > 0) {
                 $this->paymentProcessor->applyBalanceToDebt($activeDebt);
             }
-        }
-
-        $this->em->flush();
-
-        // Notify admins if new debtors detected
-        if ($report->createdCount > 0 || $report->incrementedCount > 0) {
-            $this->notifyAdmins($report, $today);
-        }
-
-        return $report;
     }
 
     private function notifyAdmins(DetectionReport $report, \DateTimeImmutable $today): void
