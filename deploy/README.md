@@ -87,6 +87,13 @@ systemctl status mysql
 systemctl status smartpay-messenger
 ```
 
+### Qarzdorlar aniqlashda xatolik yuzaga kelsa
+### qo'lda tuzatish
+```bash
+cd /var/www/smartpay/backend
+php bin/console app:debt:check
+```
+
 ### Loglarni Ko'rish
 ```bash
 # Backend logs
