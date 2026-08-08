@@ -85,6 +85,15 @@ final class InvoiceGenerator
             $totalAmount = '0.00';
             $itemsCount = 0;
 
+            // Pre-fetch all CMS for the period to avoid N+1 query
+            $cmsList = $this->em->getRepository(ClientMonthlyStatus::class)->findBy(['period' => $period]);
+            $cmsMap = [];
+            foreach ($cmsList as $cms) {
+                if ($cms->getClient() !== null) {
+                    $cmsMap[$cms->getClient()->getId()] = $cms;
+                }
+            }
+
             // Add items for eligible clients
             foreach ($clients as $client) {
                 $quantity = $client->getProductCount();
@@ -107,7 +116,7 @@ final class InvoiceGenerator
                 $itemsCount++;
 
                 // UPSERT CMS as paid via fakt
-                $this->upsertCms($client, $period, $invoice);
+                $this->upsertCms($client, $period, $invoice, $cmsMap);
             }
 
             // Add carried debt items
@@ -170,12 +179,9 @@ final class InvoiceGenerator
         }
     }
 
-    private function upsertCms($client, string $period, Invoice $invoice): void
+    private function upsertCms($client, string $period, Invoice $invoice, array &$cmsMap): void
     {
-        $existing = $this->em->getRepository(ClientMonthlyStatus::class)->findOneBy([
-            'client' => $client,
-            'period' => $period,
-        ]);
+        $existing = $cmsMap[$client->getId()] ?? null;
 
         if ($existing !== null) {
             $existing->setInvoice($invoice);
