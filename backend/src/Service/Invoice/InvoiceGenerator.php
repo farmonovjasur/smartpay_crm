@@ -81,42 +81,55 @@ final class InvoiceGenerator
             $invoice->setCreatedBy($actor);
 
             $this->em->persist($invoice);
+            $this->em->flush(); // Generate ID for DBAL inserts
 
             $totalAmount = '0.00';
             $itemsCount = 0;
+            $nowStr = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+            $invoiceId = $invoice->getId();
 
-            // Pre-fetch all CMS for the period to avoid N+1 query
-            $cmsList = $this->em->getRepository(ClientMonthlyStatus::class)->findBy(['period' => $period]);
-            $cmsMap = [];
-            foreach ($cmsList as $cms) {
-                if ($cms->getClient() !== null) {
-                    $cmsMap[$cms->getClient()->getId()] = $cms;
-                }
-            }
+            $invoiceItemsParams = [];
+            $cmsParams = [];
+            $clientIdsToUpdate = [];
 
             // Add items for eligible clients
             foreach ($clients as $client) {
                 $quantity = $client->getProductCount();
                 $totalPrice = bcmul($unitPrice, (string) $quantity, 2);
 
-                $item = new InvoiceItem();
-                $item->setClient($client);
-                $item->setClientNameSnapshot($client->getName());
-                $item->setClientInnSnapshot($client->getInn());
-                $item->setClientPhoneSnapshot($client->getPhone());
-                $item->setPaymentTypeSnapshot($client->getPaymentType());
-                $item->setQuantity($quantity);
-                $item->setUnitPrice($unitPrice);
-                $item->setTotalPrice($totalPrice);
-                $item->setIsCarriedDebt(false);
+                $invoiceItemsParams[] = [
+                    $invoiceId,
+                    $client->getId(),
+                    $client->getName(),
+                    $client->getInn(),
+                    $client->getPhone() ?? '',
+                    $client->getPaymentType()->value,
+                    $quantity,
+                    $unitPrice,
+                    $totalPrice,
+                    0, // is_carried_debt
+                    null, // debt_id
+                    $nowStr
+                ];
 
-                $invoice->addItem($item);
+                $cmsParams[] = [
+                    $client->getId(),
+                    $period,
+                    PaymentStatus::Paid->value,
+                    PayMethod::Fakt->value,
+                    $client->getPaymentType()->value,
+                    $invoiceId,
+                    $nowStr,
+                    $nowStr
+                ];
 
                 $totalAmount = bcadd($totalAmount, $totalPrice, 2);
                 $itemsCount++;
 
-                // UPSERT CMS as paid via fakt
-                $this->upsertCms($client, $period, $invoice, $cmsMap);
+                $currentLastPaid = $client->getLastPaidPeriod();
+                if ($currentLastPaid === null || strcmp($period, $currentLastPaid) > 0) {
+                    $clientIdsToUpdate[] = $client->getId();
+                }
             }
 
             // Add carried debt items
@@ -125,19 +138,20 @@ final class InvoiceGenerator
                 $quantity = $client->getProductCount();
                 $debtTotalPrice = $debt->getAmount();
 
-                $item = new InvoiceItem();
-                $item->setClient($client);
-                $item->setClientNameSnapshot($client->getName());
-                $item->setClientInnSnapshot($client->getInn());
-                $item->setClientPhoneSnapshot($client->getPhone());
-                $item->setPaymentTypeSnapshot($debt->getPaymentTypeSnapshot());
-                $item->setQuantity($debt->getMonthsOverdue() * $quantity);
-                $item->setUnitPrice($unitPrice);
-                $item->setTotalPrice($debtTotalPrice);
-                $item->setIsCarriedDebt(true);
-                $item->setDebt($debt);
-
-                $invoice->addItem($item);
+                $invoiceItemsParams[] = [
+                    $invoiceId,
+                    $client->getId(),
+                    $client->getName(),
+                    $client->getInn(),
+                    $client->getPhone() ?? '',
+                    $debt->getPaymentTypeSnapshot()->value,
+                    $debt->getMonthsOverdue() * $quantity,
+                    $unitPrice,
+                    $debtTotalPrice,
+                    1, // is_carried_debt
+                    $debt->getId(),
+                    $nowStr
+                ];
 
                 $totalAmount = bcadd($totalAmount, $debtTotalPrice, 2);
                 $itemsCount++;
@@ -146,10 +160,23 @@ final class InvoiceGenerator
             $invoice->setTotalAmount($totalAmount);
             $invoice->setItemsCount($itemsCount);
 
-            $this->em->flush();
+            // Execute DBAL Bulk Inserts (1000s of rows in < 1 second)
+            if (!empty($invoiceItemsParams)) {
+                $this->bulkInsertInvoiceItems($conn, $invoiceItemsParams);
+            }
+
+            if (!empty($cmsParams)) {
+                $this->bulkUpsertCms($conn, $cmsParams);
+            }
+
+            if (!empty($clientIdsToUpdate)) {
+                $this->bulkUpdateClients($conn, $clientIdsToUpdate, $period, $nowStr);
+            }
+
+            $this->em->flush(); // Flush the updated total amount and count on invoice
             $conn->commit();
 
-            $this->auditLogger->log($actor, 'invoice.generated', 'invoice', $invoice->getId(), [
+            $this->auditLogger->log($actor, 'invoice.generated', 'invoice', $invoiceId, [
                 'period' => $period,
                 'items_count' => $itemsCount,
                 'total_amount' => $totalAmount,
@@ -179,34 +206,48 @@ final class InvoiceGenerator
         }
     }
 
-    private function upsertCms($client, string $period, Invoice $invoice, array &$cmsMap): void
+    private function bulkInsertInvoiceItems($conn, array $data): void
     {
-        $existing = $cmsMap[$client->getId()] ?? null;
-
-        if ($existing !== null) {
-            $existing->setInvoice($invoice);
-            if ($existing->getPaymentStatus() !== PaymentStatus::Paid) {
-                $existing->setPaymentStatus(PaymentStatus::Paid);
-                $existing->setPaymentMethod(PayMethod::Fakt);
-                $existing->setPaidAt(new \DateTimeImmutable());
+        $chunkSize = 500;
+        foreach (array_chunk($data, $chunkSize) as $chunk) {
+            $placeholders = [];
+            $params = [];
+            foreach ($chunk as $row) {
+                $placeholders[] = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+                foreach ($row as $val) {
+                    $params[] = $val;
+                }
             }
-        } else {
-            $cms = new ClientMonthlyStatus();
-            $cms->setClient($client);
-            $cms->setPeriod($period);
-            $cms->setPaymentStatus(PaymentStatus::Paid);
-            $cms->setPaymentMethod(PayMethod::Fakt);
-            $cms->setPaymentTypeSnapshot($client->getPaymentType());
-            $cms->setInvoice($invoice);
-            $cms->setPaidAt(new \DateTimeImmutable());
-            $this->em->persist($cms);
+            $sql = 'INSERT INTO invoice_items (invoice_id, client_id, client_name_snapshot, client_inn_snapshot, client_phone_snapshot, payment_type_snapshot, quantity, unit_price, total_price, is_carried_debt, debt_id, created_at) VALUES ' . implode(', ', $placeholders);
+            $conn->executeStatement($sql, $params);
         }
+    }
 
-        // Ensure last_paid_period is updated to stay in sync with CMS
-        $currentLastPaid = $client->getLastPaidPeriod();
-        if ($currentLastPaid === null || strcmp($period, $currentLastPaid) > 0) {
-            $client->setLastPaidPeriod($period);
-            $client->setUpdatedAt(new \DateTimeImmutable());
+    private function bulkUpsertCms($conn, array $data): void
+    {
+        $chunkSize = 500;
+        foreach (array_chunk($data, $chunkSize) as $chunk) {
+            $placeholders = [];
+            $params = [];
+            foreach ($chunk as $row) {
+                $placeholders[] = '(?, ?, ?, ?, ?, ?, ?, ?)';
+                foreach ($row as $val) {
+                    $params[] = $val;
+                }
+            }
+            $sql = 'INSERT INTO client_monthly_status (client_id, period, payment_status, payment_method, payment_type_snapshot, invoice_id, paid_at, created_at) VALUES ' . implode(', ', $placeholders) . ' ON DUPLICATE KEY UPDATE invoice_id = VALUES(invoice_id), payment_status = VALUES(payment_status), payment_method = VALUES(payment_method), paid_at = VALUES(paid_at)';
+            $conn->executeStatement($sql, $params);
+        }
+    }
+
+    private function bulkUpdateClients($conn, array $clientIds, string $period, string $nowStr): void
+    {
+        $chunkSize = 1000;
+        foreach (array_chunk($clientIds, $chunkSize) as $chunk) {
+            $placeholders = str_repeat('?,', count($chunk) - 1) . '?';
+            $params = array_merge([$period, $nowStr], $chunk);
+            $sql = "UPDATE clients SET last_paid_period = ?, updated_at = ? WHERE id IN ($placeholders)";
+            $conn->executeStatement($sql, $params);
         }
     }
 
