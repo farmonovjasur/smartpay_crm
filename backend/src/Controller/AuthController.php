@@ -59,7 +59,10 @@ final class AuthController extends AbstractController
 
         $response->headers->setCookie($this->cookieFactory->access($session->accessToken, $session->accessTtl));
         $response->headers->setCookie($this->cookieFactory->refresh($session->refreshToken, $session->refreshTtl));
-        $response->headers->setCookie($this->cookieFactory->csrf($session->csrfToken, $session->accessTtl));
+        // CSRF cookie muddati refresh_token bilan bir xil (7 kun).
+        // Agar accessTtl bilan bo'lsa, access_token va csrf_token bir vaqtda expired bo'ladi,
+        // CsrfSubscriber 403 qaytaradi va JWT 401 → refresh mexanizmi ishlamaydi.
+        $response->headers->setCookie($this->cookieFactory->csrf($session->csrfToken, $session->refreshTtl));
 
         return $response;
     }
@@ -86,7 +89,7 @@ final class AuthController extends AbstractController
 
         $response->headers->setCookie($this->cookieFactory->access($session->accessToken, $session->accessTtl));
         $response->headers->setCookie($this->cookieFactory->refresh($session->refreshToken, $session->refreshTtl));
-        $response->headers->setCookie($this->cookieFactory->csrf($session->csrfToken, $session->accessTtl));
+        $response->headers->setCookie($this->cookieFactory->csrf($session->csrfToken, $session->refreshTtl));
 
         return $response;
     }
