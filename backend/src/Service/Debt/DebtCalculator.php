@@ -197,6 +197,9 @@ final class DebtCalculator
                     $existingDebt->setStatus(DebtStatus::Paid);
                     $existingDebt->setPaidAt(new \DateTimeImmutable());
                     $existingDebt->setPaidMethod(PayMethod::Naqt);
+                    // Mijozning lastPaidPeriod ini ham yangilash
+                    $client->setLastPaidPeriod($currentPeriod);
+                    $client->setUpdatedAt(new \DateTimeImmutable());
                 } else {
                     $existingDebt->setStatus(
                         bccomp($oldPaidAmount, '0.00', 2) > 0

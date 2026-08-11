@@ -117,6 +117,24 @@ final class ReconcileClientDebtsCommand extends Command
             ]);
 
             if ($existing !== null) {
+                // paidAmount ni saqlab qolish — DebtCalculator logikasi bilan bir xil
+                $oldPaidAmount = $existing->getPaidAmount();
+                if (bccomp($oldPaidAmount, $totalAmount, 2) >= 0) {
+                    $existing->setPaidAmount($totalAmount);
+                    $existing->setStatus(DebtStatus::Paid);
+                    $existing->setPaidAt(new \DateTimeImmutable());
+                    $existing->setPaidMethod(\App\Enum\PayMethod::Naqt);
+                    // lastPaidPeriod ni yangilash
+                    $client->setLastPaidPeriod($currentPeriod);
+                    $client->setUpdatedAt($now);
+                } else {
+                    $existing->setStatus(
+                        bccomp($oldPaidAmount, '0.00', 2) > 0
+                            ? DebtStatus::Partial
+                            : DebtStatus::Active
+                    );
+                }
+
                 $existing->setMonthlyAmount($monthlyAmount);
                 $existing->setMonthsOverdue($monthsOverdue);
                 $existing->setAmount($totalAmount);
