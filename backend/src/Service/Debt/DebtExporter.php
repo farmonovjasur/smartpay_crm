@@ -177,7 +177,7 @@ final class DebtExporter
                     'inn' => $client->getInn(),
                     'product_count' => $client->getProductCount(),
                     'months_overdue' => $debt->getMonthsOverdue(),
-                    'amount' => $debt->getAmount(),
+                    'amount' => $debt->getRemainingAmount(),
                     'phone' => $client->getPhone(),
                     'phone2' => $client->getPhone2(),
                 ];
@@ -238,7 +238,7 @@ final class DebtExporter
             'inn' => $d->getClient()->getInn(),
             'product_count' => $d->getClient()->getProductCount(),
             'months_overdue' => $d->getMonthsOverdue(),
-            'amount' => $d->getAmount(),
+            'amount' => $d->getRemainingAmount(),
             'phone' => $d->getClient()->getPhone(),
             'phone2' => $d->getClient()->getPhone2(),
         ], $debts);
