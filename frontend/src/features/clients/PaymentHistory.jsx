@@ -1,14 +1,17 @@
 import { useState, useMemo } from 'react';
-import { History, Banknote, CreditCard, CalendarDays, AlertTriangle, Download, Wallet } from 'lucide-react';
+import { History, Banknote, CreditCard, CalendarDays, AlertTriangle, Download, Wallet, Receipt } from 'lucide-react';
 import { usePayments, usePrepayments } from './hooks';
 import { formatDate, formatPeriod } from '@/lib/date';
 import { formatMoney } from '@/lib/money';
 import { downloadFile } from '@/lib/download';
+import { PaymentReceipt } from './PaymentReceipt';
 
-export function PaymentHistory({ clientId }) {
+export function PaymentHistory({ clientId, client }) {
   const { data: payments = [], isLoading: pLoading } = usePayments(clientId);
   const { data: prepayments = [], isLoading: prLoading } = usePrepayments(clientId);
   const [exporting, setExporting] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
 
   const isLoading = pLoading || prLoading;
 
@@ -27,6 +30,11 @@ export function PaymentHistory({ clientId }) {
     } finally {
       setExporting(false);
     }
+  }
+
+  function handleOpenReceipt(row) {
+    setSelectedPayment(row);
+    setReceiptOpen(true);
   }
 
   if (isLoading) {
@@ -86,6 +94,7 @@ export function PaymentHistory({ clientId }) {
               <th className="px-5 py-3 font-medium">Turi</th>
               <th className="px-5 py-3 font-medium">Usul</th>
               <th className="px-5 py-3 font-medium">Kiritgan xodim</th>
+              <th className="px-5 py-3 font-medium text-center">Chek</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
@@ -142,11 +151,30 @@ export function PaymentHistory({ clientId }) {
                 <td className="px-5 py-3 text-[var(--text-secondary)] whitespace-nowrap">
                   {row.created_by || 'Tizim'}
                 </td>
+                <td className="px-5 py-3 text-center whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenReceipt(row)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--card-bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:border-primary hover:bg-primary-bg hover:text-primary"
+                    title="Chekni ko'rish"
+                  >
+                    <Receipt className="h-3.5 w-3.5" />
+                    Chek
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Receipt Modal */}
+      <PaymentReceipt
+        open={receiptOpen}
+        onOpenChange={setReceiptOpen}
+        payment={selectedPayment}
+        client={client}
+      />
     </div>
   );
 }

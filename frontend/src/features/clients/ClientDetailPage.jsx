@@ -161,7 +161,7 @@ export default function ClientDetailPage() {
 
       {/* Payment and Prepayment Histories */}
       <div className="space-y-6">
-        <PaymentHistory clientId={id} />
+        <PaymentHistory clientId={id} client={client} />
       </div>
 
       {/* Dialoglar */}
