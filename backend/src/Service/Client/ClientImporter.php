@@ -63,7 +63,7 @@ final class ClientImporter
         $result = new ImportResult();
         $seenInns = [];
         $seenNames = [];
-        $seenPhones = [];
+
 
         // Header is on row index 2 (Excel row 3). Data starts at index 3.
         for ($i = 3, $count = count($rows); $i < $count; $i++) {
@@ -84,7 +84,7 @@ final class ClientImporter
 
             $inn = $parsed['data']['inn'];
             $nameKey = mb_strtolower(trim($parsed['data']['name']));
-            $phone = trim($parsed['data']['phone']);
+
 
             // Check INN duplicates within file or DB
             if (isset($seenInns[$inn]) || $this->clientRepository->findOneAliveByInn($inn) !== null) {
@@ -100,16 +100,8 @@ final class ClientImporter
                 continue;
             }
 
-            // Check Phone duplicates within file or DB
-            if (isset($seenPhones[$phone]) || $this->clientRepository->findOneAliveByPhone($phone) !== null) {
-                $result->duplicateRows[] = ['row' => $i + 1, 'inn' => $inn, 'reason' => 'Phone duplicate'];
-                $seenPhones[$phone] = true;
-                continue;
-            }
-
             $seenInns[$inn] = true;
             $seenNames[$nameKey] = true;
-            $seenPhones[$phone] = true;
 
             if (!$dryRun) {
                 $client = new Client();
