@@ -7,6 +7,7 @@ import { showSuccess, showInfo } from '@/lib/toast';
 import { formatMoney } from '@/lib/money';
 import { usePayDebt } from './hooks';
 import { cn } from '@/lib/utils';
+import { PaymentReceipt } from '@/features/clients/PaymentReceipt';
 
 const METHOD_OPTIONS = [
   {
@@ -36,16 +37,19 @@ const MIN_AMOUNT = 1000;
  * - Summa kiritish maydoni mavjud (default = qarz qoldig'i)
  * - Minimal summa: 1 000 so'm
  * - Qolgan qarz real-time ko'rsatiladi
- * - Ortiqcha summa mijoz balansiga tushadi
+ * - Ortiqcha summa kelgusi oylarga oldindan to'lov sifatida taqsimlanadi
+ * - Muvaffaqiyatli to'lovdan so'ng to'liq taqsimot cheki avtomatik ochiladi
  *
  * @param {{
  *   open: boolean,
  *   onOpenChange: (v: boolean) => void,
- *   debt: { id: string|number, client_name: string, amount: string, paid_amount: string, remaining_amount: string, payment_type_snapshot: string },
+ *   debt: { id: string|number, client_id?: number, client_name: string, client_inn?: string, client_phone?: string, amount: string, paid_amount: string, remaining_amount: string, payment_type_snapshot: string },
  * }} props
  */
 export function PayDebtDialog({ open, onOpenChange, debt }) {
   const mutation = usePayDebt(debt?.id, debt?.client_id);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
 
   // Default method — qarz `payment_type_snapshot` ga qarab.
   const defaultMethod = debt?.payment_type_snapshot === 'naqt' ? 'naqt' : 'fakt';
@@ -98,7 +102,7 @@ export function PayDebtDialog({ open, onOpenChange, debt }) {
           if (d?.fully_paid) {
             if (parseFloat(d.overpayment) > 0) {
               showSuccess(
-                `Qarz to'liq to'landi! ${formatMoney(d.overpayment)} so'm balansga tushdi.`
+                `Qarz to'liq to'landi! ${formatMoney(d.overpayment)} so'm kelgusi davrga taqsimlandi.`
               );
             } else {
               showSuccess(`Qarz to'liq to'landi (${data.method === 'fakt' ? 'Fakt' : 'Naqt'})`);
@@ -107,6 +111,11 @@ export function PayDebtDialog({ open, onOpenChange, debt }) {
             showInfo(
               `Qisman to'lov qabul qilindi. Qolgan qarz: ${formatMoney(d?.remaining_amount)} so'm`
             );
+          }
+
+          if (d?.receipt) {
+            setReceiptData(d.receipt);
+            setReceiptOpen(true);
           }
           onOpenChange(false);
         },
@@ -128,31 +137,32 @@ export function PayDebtDialog({ open, onOpenChange, debt }) {
   const submitting = mutation.isPending || isSubmitting;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[520px] p-0">
-        <form onSubmit={handleSubmit(onSubmit)}>
-          {/* Header */}
-          <div className="flex items-start justify-between border-b border-[var(--border)] p-6">
-            <div className="space-y-1">
-              <h2 className="text-xl font-semibold text-[var(--text-primary)]">Qarzni to'lash</h2>
-              <p className="text-sm text-[var(--text-secondary)]">
-                {debt?.client_name && (
-                  <>
-                    <span className="font-medium text-[var(--text-primary)]">{debt.client_name}</span>{' '}
-                  </>
-                )}
-                — to'lov summasi va usulini kiriting
-              </p>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-[520px] p-0">
+          <form onSubmit={handleSubmit(onSubmit)}>
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-[var(--border)] p-6">
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold text-[var(--text-primary)]">Qarzni to'lash</h2>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {debt?.client_name && (
+                    <>
+                      <span className="font-medium text-[var(--text-primary)]">{debt.client_name}</span>{' '}
+                    </>
+                  )}
+                  — to'lov summasi va usulini kiriting
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-md bg-bg-light text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+                aria-label="Yopish"
+              >
+                <X className="h-[18px] w-[18px]" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-md bg-bg-light text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
-              aria-label="Yopish"
-            >
-              <X className="h-[18px] w-[18px]" />
-            </button>
-          </div>
 
           {/* Body */}
           <div className="space-y-6 p-6 max-h-[75vh] overflow-y-auto">
@@ -374,6 +384,20 @@ export function PayDebtDialog({ open, onOpenChange, debt }) {
         </form>
       </DialogContent>
     </Dialog>
+
+    {receiptData && (
+      <PaymentReceipt
+        open={receiptOpen}
+        onOpenChange={setReceiptOpen}
+        payment={receiptData}
+        client={receiptData?.client || {
+          name: debt?.client_name,
+          inn: debt?.client_inn,
+          phone: debt?.client_phone,
+        }}
+      />
+    )}
+  </>
   );
 }
 

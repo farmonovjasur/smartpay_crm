@@ -30,8 +30,14 @@ if (isset($_SERVER['APP_ENV']) && $_SERVER['APP_ENV'] === 'test') {
 
     if (!empty($metadata)) {
         // Drop and recreate to ensure clean state
-        $schemaTool->dropSchema($metadata);
+        $conn = $em->getConnection();
+        $conn->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
+        $tables = $conn->createSchemaManager()->listTableNames();
+        foreach ($tables as $table) {
+            $conn->executeStatement("DROP TABLE IF EXISTS `{$table}`");
+        }
         $schemaTool->createSchema($metadata);
+        $conn->executeStatement('SET FOREIGN_KEY_CHECKS = 1');
     }
 
     $kernel->shutdown();

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Wallet, ChevronDown, Hash, Download, Search } from 'lucide-react';
+import { Wallet, ChevronDown, Hash, Download, Search, Receipt } from 'lucide-react';
 import {
   PageHeader, Pagination, ErrorState, EmptyState,
 } from '@/components/common';
 import { useDebtors } from './hooks';
 import { PayDebtDialog } from './PayDebtDialog';
+import { PaymentReceipt } from '@/features/clients/PaymentReceipt';
 import { useDebounce } from '@/lib/useDebounce';
 import { formatMoney } from '@/lib/money';
 import { formatDate } from '@/lib/date';
@@ -17,6 +18,7 @@ export default function DebtorsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [payTarget, setPayTarget] = useState(null);
+  const [receiptTarget, setReceiptTarget] = useState(null);
   const [exporting, setExporting] = useState(false);
   const debouncedSearch = useDebounce(search, 400);
 
@@ -152,13 +154,19 @@ export default function DebtorsPage() {
                       <PaymentTypeBadge type={debt.payment_type_snapshot} />
                     </td>
                     <td className="px-3 py-3.5">
-                      <DurationBadge months={debt.months_overdue} />
+                      <DurationBadge months={debt.months_overdue} status={debt.status} />
                     </td>
                     <td className="px-3 py-3.5">
                       <StatusBadge status={debt.status} />
                     </td>
                     <td className="px-3 py-3.5 text-right font-semibold tabular-nums text-[var(--text-primary)]">
-                      {debt.status === 'partial' ? (
+                      {debt.status === 'paid' ? (
+                        <div>
+                          <span>{formatMoney(debt.amount)} <span className="text-xs text-[var(--text-secondary)]">so'm</span></span>
+                          <br />
+                          <span className="text-[10px] text-success font-medium">0 so'm qoldiq</span>
+                        </div>
+                      ) : debt.status === 'partial' ? (
                         <div>
                           <span className="text-[var(--text-secondary)] line-through text-xs">
                             {formatMoney(debt.amount)}
@@ -187,8 +195,8 @@ export default function DebtorsPage() {
                       )}
                     </td>
                     <td className="px-3 py-3.5">
-                      <div className="flex items-center justify-center">
-                        {(debt.status === 'active' || debt.status === 'partial') ? (
+                      <div className="flex items-center justify-center gap-1.5">
+                        {(debt.status === 'active' || debt.status === 'partial') && (
                           <button
                             type="button"
                             onClick={() => setPayTarget(debt)}
@@ -197,8 +205,17 @@ export default function DebtorsPage() {
                             <Wallet className="h-3.5 w-3.5" />
                             {debt.status === 'partial' ? "Davom" : "To'lash"}
                           </button>
-                        ) : (
-                          <span className="text-xs text-[var(--text-secondary)]">—</span>
+                        )}
+                        {(debt.status === 'paid' || parseFloat(debt.paid_amount) > 0) && (
+                          <button
+                            type="button"
+                            onClick={() => setReceiptTarget(debt)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--card-bg)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-secondary)] transition-all hover:border-primary hover:bg-primary-bg hover:text-primary"
+                            title="To'lov chekini ko'rish va chop etish"
+                          >
+                            <Receipt className="h-3.5 w-3.5" />
+                            Chek
+                          </button>
                         )}
                       </div>
                     </td>
@@ -225,6 +242,22 @@ export default function DebtorsPage() {
         onOpenChange={(v) => !v && setPayTarget(null)}
         debt={payTarget}
       />
+
+      {receiptTarget && (
+        <PaymentReceipt
+          open={!!receiptTarget}
+          onOpenChange={(v) => !v && setReceiptTarget(null)}
+          payment={receiptTarget}
+          client={{
+            id: receiptTarget.client_id,
+            name: receiptTarget.client_name,
+            inn: receiptTarget.client_inn,
+            phone: receiptTarget.client_phone,
+            balance: receiptTarget.balance,
+            last_paid_period: receiptTarget.client_last_paid_period,
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -259,8 +292,15 @@ function PaymentTypeBadge({ type }) {
 }
 
 /** months_overdue ga qarab rang darajasi (warning → danger). */
-function DurationBadge({ months }) {
+function DurationBadge({ months, status }) {
   const m = Number(months) || 0;
+  if (status === 'paid') {
+    return (
+      <span className="inline-flex items-center rounded-xl bg-bg-light px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)]">
+        {m} oy
+      </span>
+    );
+  }
   let cls = 'bg-warning-bg text-warning-text';
   if (m >= 6) cls = 'bg-danger-bg text-danger-text';
   else if (m >= 3) cls = 'bg-[#FFEDD5] text-[#EA580C]';

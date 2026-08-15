@@ -670,6 +670,7 @@ final class ClientService
             'notes' => $p->getNotes(),
             'created_by' => $p->getCreatedBy()?->getName(),
             'is_debt' => $p->getDebt() !== null,
+            'debt_id' => $p->getDebt()?->getId(),
         ], $payments);
     }
 }

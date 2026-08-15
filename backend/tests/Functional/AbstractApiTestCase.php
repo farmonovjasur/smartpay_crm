@@ -59,11 +59,11 @@ abstract class AbstractApiTestCase extends WebTestCase
             $connection->executeStatement('DROP TABLE IF EXISTS `' . $table . '`');
         }
 
-        $connection->executeStatement('SET FOREIGN_KEY_CHECKS = 1');
-
         $schemaTool = new SchemaTool($this->em);
         $metadata = $this->em->getMetadataFactory()->getAllMetadata();
         $schemaTool->createSchema($metadata);
+
+        $connection->executeStatement('SET FOREIGN_KEY_CHECKS = 1');
     }
 
     /**

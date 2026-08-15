@@ -7,6 +7,7 @@ import { showSuccess } from '@/lib/toast';
 import { usePrepay } from './hooks';
 import { cn } from '@/lib/utils';
 import { formatMoney } from '@/lib/money';
+import { PaymentReceipt } from './PaymentReceipt';
 
 const METHOD_OPTIONS = [
   {
@@ -32,6 +33,8 @@ export function PrepayDialog({ open, onOpenChange, client }) {
   const defaultMethod = client?.payment_type === 'fakt' ? 'fakt' : 'naqt';
   
   const [selectedMonths, setSelectedMonths] = useState(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
 
   const {
     register,
@@ -78,6 +81,18 @@ export function PrepayDialog({ open, onOpenChange, client }) {
       {
         onSuccess: (res) => {
           showSuccess(res?.message || "Oldindan to'lov muvaffaqiyatli saqlandi");
+          const prepaymentData = res?.data;
+          if (prepaymentData) {
+            setReceiptData({
+              id: prepaymentData.id,
+              _type: 'prepayment',
+              amount: prepaymentData.amount,
+              method: prepaymentData.method,
+              paid_at: prepaymentData.paid_at,
+              notes: data.notes || "Oldindan to'lov",
+            });
+            setReceiptOpen(true);
+          }
           onOpenChange(false);
         },
         onError: (err) =>
@@ -90,7 +105,8 @@ export function PrepayDialog({ open, onOpenChange, client }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[520px] p-0">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           {/* Header */}
@@ -268,5 +284,15 @@ export function PrepayDialog({ open, onOpenChange, client }) {
         </form>
       </DialogContent>
     </Dialog>
+
+    {receiptData && (
+      <PaymentReceipt
+        open={receiptOpen}
+        onOpenChange={setReceiptOpen}
+        payment={receiptData}
+        client={client}
+      />
+    )}
+  </>
   );
 }

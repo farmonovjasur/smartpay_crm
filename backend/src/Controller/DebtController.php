@@ -150,11 +150,92 @@ final class DebtController extends AbstractController
             throw new NotFoundHttpException('Debt not found.');
         }
 
+        $client = $debt->getClient();
+
+        // 1. Debt payments
+        $debtPayments = $this->em->getRepository(\App\Entity\Payment::class)->findBy(['debt' => $debt], ['period' => 'ASC']);
+        $debtItems = array_map(fn (\App\Entity\Payment $p) => [
+            'id' => $p->getId(),
+            'period' => $p->getPeriod(),
+            'period_label' => $this->formatPeriodLabel($p->getPeriod()),
+            'amount' => $p->getAmount(),
+            'type' => 'debt',
+            'label' => "Qarz yopildi",
+            'notes' => $p->getNotes(),
+            'paid_at' => $p->getPaidAt()->format('c'),
+        ], $debtPayments);
+
+        // 2. Future months covered by client's balance (oldindan to'lov / depozit)
+        $prepaidItems = [];
+        $unitPrice = $this->configService->get('unit_price');
+        $monthlyAmount = bcmul($unitPrice, (string) $client->getProductCount(), 2);
+        $clientBalance = $client->getBalance();
+        $estimatedPaidUpTo = $client->getLastPaidPeriod() ?? $debt->getLastOverduePeriod();
+
+        if (bccomp($clientBalance, '0', 2) > 0 && bccomp($monthlyAmount, '0', 2) > 0) {
+            $estimatedMonths = (int) bcdiv($clientBalance, $monthlyAmount, 0);
+            $startDate = ($estimatedPaidUpTo !== null && $estimatedPaidUpTo !== '')
+                ? (\DateTimeImmutable::createFromFormat('Y-m-d', $estimatedPaidUpTo . '-01'))->modify('+1 month')
+                : new \DateTimeImmutable();
+
+            for ($i = 0; $i < $estimatedMonths; $i++) {
+                $periodStr = $startDate->modify("+{$i} months")->format('Y-m');
+                $prepaidItems[] = [
+                    'type' => 'prepaid',
+                    'period' => $periodStr,
+                    'period_label' => $this->formatPeriodLabel($periodStr),
+                    'amount' => $monthlyAmount,
+                    'label' => "Oldindan to'lov (balansdan)",
+                ];
+                $estimatedPaidUpTo = $periodStr;
+            }
+        }
+
+        $totalTransactionAmount = bcadd($debt->getPaidAmount(), $clientBalance, 2);
+        $distributionItems = array_merge($debtItems, $prepaidItems);
+
+        $receipt = [
+            'receipt_id' => sprintf('CHK-%s-%06d', ($debt->getPaidAt() ?? new \DateTimeImmutable())->format('Ymd'), $debt->getId()),
+            'paid_at' => ($debt->getPaidAt() ?? new \DateTimeImmutable())->format('c'),
+            'payment_method' => $debt->getPaidMethod()?->value ?? 'naqt',
+            'payment_method_label' => $debt->getPaidMethod() === PayMethod::Fakt ? 'Fakt (online)' : 'Naqt',
+            'total_amount' => $totalTransactionAmount,
+            'debt_amount_paid' => $debt->getPaidAmount(),
+            'prepaid_amount' => $clientBalance,
+            'balance_added' => $clientBalance,
+            'client' => [
+                'id' => $client->getId(),
+                'name' => $client->getName(),
+                'inn' => $client->getInn(),
+                'phone' => $client->getPhone(),
+                'balance' => $client->getBalance(),
+                'last_paid_period' => $client->getLastPaidPeriod(),
+                'last_paid_period_label' => $client->getLastPaidPeriod() ? $this->formatPeriodLabel($client->getLastPaidPeriod()) : null,
+            ],
+            'debt_items' => $debtItems,
+            'prepaid_items' => $prepaidItems,
+            'balance_item' => bccomp($clientBalance, '0', 2) > 0 ? [
+                'amount' => $clientBalance,
+                'label' => "Joriy balans (depozit)",
+            ] : null,
+            'summary' => [
+                'debt_remaining' => $debt->getRemainingAmount(),
+                'new_balance' => $client->getBalance(),
+                'paid_up_to' => $estimatedPaidUpTo,
+                'paid_up_to_label' => $estimatedPaidUpTo ? $this->formatPeriodLabel($estimatedPaidUpTo) : null,
+                'months_debt_closed' => count($debtItems),
+                'months_prepaid' => count($prepaidItems),
+                'created_by' => $debt->getPaidBy()?->getName() ?? 'Admin',
+            ],
+        ];
+
         return new JsonResponse(['data' => [
             'id' => $debt->getId(),
-            'client_id' => $debt->getClient()->getId(),
-            'client_name' => $debt->getClient()->getName(),
-            'client_inn' => $debt->getClient()->getInn(),
+            'client_id' => $client->getId(),
+            'client_name' => $client->getName(),
+            'client_inn' => $client->getInn(),
+            'client_phone' => $client->getPhone(),
+            'client_last_paid_period' => $client->getLastPaidPeriod(),
             'amount' => $debt->getAmount(),
             'paid_amount' => $debt->getPaidAmount(),
             'remaining_amount' => $debt->getRemainingAmount(),
@@ -164,9 +245,14 @@ final class DebtController extends AbstractController
             'last_overdue_period' => $debt->getLastOverduePeriod(),
             'payment_type_snapshot' => $debt->getPaymentTypeSnapshot()->value,
             'status' => $debt->getStatus()->value,
-            'balance' => $debt->getClient()->getBalance(),
+            'balance' => $client->getBalance(),
             'paid_at' => $debt->getPaidAt()?->format('c'),
             'paid_method' => $debt->getPaidMethod()?->value,
+            'advance_amount' => $clientBalance,
+            'advance_payments' => $prepaidItems,
+            'total_transaction_amount' => $totalTransactionAmount,
+            'distribution_items' => $distributionItems,
+            'receipt' => $receipt,
         ]]);
     }
 
@@ -238,6 +324,8 @@ final class DebtController extends AbstractController
                 'balance' => $result['balance'],
                 'fully_paid' => $result['fully_paid'],
                 'months_closed' => $result['months_closed'],
+                'advance_months_closed' => $result['advance_months_closed'] ?? 0,
+                'receipt' => $result['receipt'] ?? null,
             ],
         ]);
     }
@@ -288,6 +376,8 @@ final class DebtController extends AbstractController
             'payment_type_snapshot' => $d->getPaymentTypeSnapshot()->value,
             'status' => $d->getStatus()->value,
             'due_date' => $d->getDueDate()->format('Y-m-d'),
+            'paid_at' => $d->getPaidAt()?->format('c'),
+            'paid_method' => $d->getPaidMethod()?->value,
         ], $debts);
 
         return new JsonResponse(['data' => $data, 'total' => $total, 'page' => $page, 'pageSize' => $pageSize]);
