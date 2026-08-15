@@ -2,18 +2,42 @@ import { lazy } from 'react';
 import { createRouter, createRootRoute, createRoute, redirect } from '@tanstack/react-router';
 import { requireAuth, requireAdmin, requireGuest } from './guards';
 
-const LoginPage = lazy(() => import('@/features/auth/LoginPage'));
-const AppLayout = lazy(() => import('@/layouts/AppLayout'));
-const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage'));
-const ClientsPage = lazy(() => import('@/features/clients/ClientsPage'));
-const ClientDetailPage = lazy(() => import('@/features/clients/ClientDetailPage'));
-const InvoicesPage = lazy(() => import('@/features/invoices/InvoicesPage'));
-const InvoiceDetailPage = lazy(() => import('@/features/invoices/InvoiceDetailPage'));
-const DebtorsPage = lazy(() => import('@/features/debtors/DebtorsPage'));
-const DebtorDetailPage = lazy(() => import('@/features/debtors/DebtorDetailPage'));
-const NotificationsPage = lazy(() => import('@/features/notifications/NotificationsPage'));
-const UsersPage = lazy(() => import('@/features/users/UsersPage'));
-const AuditLogPage = lazy(() => import('@/features/audit/AuditLogPage'));
+/**
+ * Lazy import xatolarini ushlab, sahifani avtomatik qayta yuklaydi.
+ * Yangi deploy qilinganda eski chunk fayllari topilmasa,
+ * foydalanuvchi uchun sahifa avtomatik refreshlanadi (faqat 1 marta).
+ */
+function lazyWithRetry(importFn) {
+  return lazy(() =>
+    importFn().catch((error) => {
+      // Cheksiz reload loop'dan himoya
+      const key = 'chunk_reload_' + window.location.pathname;
+      const lastReload = sessionStorage.getItem(key);
+      const now = Date.now();
+
+      if (!lastReload || now - Number(lastReload) > 10000) {
+        sessionStorage.setItem(key, String(now));
+        window.location.reload();
+      }
+
+      throw error;
+    })
+  );
+}
+
+const LoginPage = lazyWithRetry(() => import('@/features/auth/LoginPage'));
+const AppLayout = lazyWithRetry(() => import('@/layouts/AppLayout'));
+const DashboardPage = lazyWithRetry(() => import('@/features/dashboard/DashboardPage'));
+const ClientsPage = lazyWithRetry(() => import('@/features/clients/ClientsPage'));
+const ClientDetailPage = lazyWithRetry(() => import('@/features/clients/ClientDetailPage'));
+const InvoicesPage = lazyWithRetry(() => import('@/features/invoices/InvoicesPage'));
+const InvoiceDetailPage = lazyWithRetry(() => import('@/features/invoices/InvoiceDetailPage'));
+const DebtorsPage = lazyWithRetry(() => import('@/features/debtors/DebtorsPage'));
+const DebtorDetailPage = lazyWithRetry(() => import('@/features/debtors/DebtorDetailPage'));
+const NotificationsPage = lazyWithRetry(() => import('@/features/notifications/NotificationsPage'));
+const UsersPage = lazyWithRetry(() => import('@/features/users/UsersPage'));
+const AuditLogPage = lazyWithRetry(() => import('@/features/audit/AuditLogPage'));
+
 
 const rootRoute = createRootRoute();
 
