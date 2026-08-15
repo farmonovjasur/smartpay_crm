@@ -104,7 +104,7 @@ log_info "Services'larni qayta yuklash..."
 
 systemctl restart php8.2-fpm
 systemctl restart smartpay-messenger
-systemctl reload nginx
+systemctl restart nginx
 
 log_success "Services qayta yuklandi"
 
