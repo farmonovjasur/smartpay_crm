@@ -74,12 +74,18 @@ final class DashboardService
             [$currentPeriod]
         );
 
+        $ledgerTotal = $conn->fetchOne(
+            "SELECT COALESCE(SUM(total_amount - paid_amount), '0.00') 
+             FROM ledger_entries WHERE status IN ('active', 'partial')"
+        );
+
         return [
             'activeClients' => $activeClients,
             'debtorsCount' => $debtorsCount,
             'totalDebt' => $totalDebt,
             'invoicesThisMonth' => $invoicesThisMonth,
             'monthlyChart' => $monthlyChart,
+            'ledgerTotal' => $ledgerTotal,
             'byPaymentType' => [
                 'fakt' => (int) ($byPaymentType['fakt'] ?? 0),
                 'naqt' => (int) ($byPaymentType['naqt'] ?? 0),

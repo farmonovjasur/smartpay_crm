@@ -49,6 +49,7 @@ export const uz = {
     clients: 'Mijozlar',
     invoices: 'Hisob-faktura',
     debtors: 'Qarzdorlar',
+    ledger: 'Qarzdaftari',
     users: 'Foydalanuvchilar',
     auditLog: 'Audit log',
     notifications: 'Bildirishnomalar',
@@ -63,6 +64,7 @@ export const uz = {
     clients: { title: 'Mijozlar', crumb: 'Mijozlar' },
     invoices: { title: 'Hisob-faktura', crumb: 'Hisob-faktura' },
     debtors: { title: 'Qarzdorlar', crumb: 'Qarzdorlar' },
+    ledger: { title: 'Qarzdaftari', crumb: 'Qarzdaftari' },
     notifications: { title: 'Bildirishnomalar', crumb: 'Bildirishnomalar' },
     users: { title: 'Foydalanuvchilar', crumb: 'Foydalanuvchilar' },
     auditLogs: { title: 'Audit log', crumb: 'Audit log' },
@@ -308,6 +310,7 @@ export const uz = {
   // ═══════════════════════════════════════════════════════
   // DASHBOARD / BOSHQARUV PANELI
   // ═══════════════════════════════════════════════════════
+  // Dashboard flat keys removed
   dashboard: {
     activeClients: 'Faol mijozlar',
     activeClientsTrend: 'Faol holatdagilar',
@@ -317,6 +320,8 @@ export const uz = {
     unpaidDebtsTrend: 'Umumiy summa',
     monthlyInvoices: 'Oylik fakturalar',
     monthlyInvoicesTrend: 'Bu oy',
+    ledgerTotal: 'Qarzdaftari',
+    viewLedger: 'Batafsil ko\'rish →',
     chartTitle: "Oylik to'lovlar statistikasi",
     chartSubtitle: "Oxirgi 6 oy · so'mda",
     chartFakt: "Fakt to'lovlar",

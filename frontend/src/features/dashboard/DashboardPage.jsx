@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { Users, TriangleAlert, Banknote, FileText, TrendingUp, TrendingDown, Calendar, ArrowRight } from 'lucide-react';
+import { Users, TriangleAlert, Banknote, FileText, TrendingUp, TrendingDown, Calendar, ArrowRight, BookOpen } from 'lucide-react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js';
 import { LoadingState, ErrorState } from '@/components/common';
@@ -51,6 +51,7 @@ export default function DashboardPage() {
     invoicesThisMonth,
     monthlyChart = [],
     byPaymentType,
+    ledgerTotal,
   } = data || {};
 
   const recentRows = recent.data?.data || [];
@@ -58,7 +59,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           accent="primary"
           icon={Users}
@@ -84,7 +85,7 @@ export default function DashboardPage() {
           iconColor="text-danger-text"
           label={t('dashboard.unpaidDebts')}
           value={`${formatMoney(totalDebt)} ${t('common.som')}`}
-          valueClass="text-[28px]"
+          valueClass="text-xl sm:text-2xl"
           trend={{ icon: TrendingUp, color: 'text-danger-text', text: t('dashboard.unpaidDebtsTrend') }}
         />
         <StatCard
@@ -95,6 +96,15 @@ export default function DashboardPage() {
           label={t('dashboard.monthlyInvoices')}
           value={invoicesThisMonth ?? '—'}
           trend={{ icon: Calendar, color: 'text-[var(--text-secondary)]', text: t('dashboard.monthlyInvoicesTrend') }}
+        />
+        <StatCard
+          accent="warning"
+          icon={BookOpen}
+          iconBg="bg-[#FEF3C7]"
+          iconColor="text-[#D97706]"
+          label={t('dashboard.ledgerTotal')}
+          value={`${formatMoney(ledgerTotal)} ${t('common.som')}`}
+          valueClass="text-xl sm:text-2xl"
         />
       </div>
 
@@ -248,7 +258,7 @@ function StatCard({ accent, icon: Icon, iconBg, iconColor, label, value, valueCl
           <Icon className={cn('h-5 w-5', iconColor)} />
         </div>
       </div>
-      <p className={cn('mt-3 text-[30px] font-bold leading-none text-[var(--text-primary)]', valueClass)}>{value}</p>
+      <p className={cn('mt-3 text-2xl font-bold leading-tight tracking-tight text-[var(--text-primary)] break-words', valueClass)}>{value}</p>
       {trend && (
         <div className={cn('mt-3 flex items-center gap-1.5 text-xs font-medium', trend.color)}>
           <trend.icon className="h-3.5 w-3.5" />

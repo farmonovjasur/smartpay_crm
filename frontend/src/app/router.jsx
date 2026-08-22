@@ -34,6 +34,8 @@ const InvoicesPage = lazyWithRetry(() => import('@/features/invoices/InvoicesPag
 const InvoiceDetailPage = lazyWithRetry(() => import('@/features/invoices/InvoiceDetailPage'));
 const DebtorsPage = lazyWithRetry(() => import('@/features/debtors/DebtorsPage'));
 const DebtorDetailPage = lazyWithRetry(() => import('@/features/debtors/DebtorDetailPage'));
+const LedgerPage = lazyWithRetry(() => import('@/features/ledger/LedgerPage'));
+const LedgerDetailPage = lazyWithRetry(() => import('@/features/ledger/LedgerDetailPage'));
 const NotificationsPage = lazyWithRetry(() => import('@/features/notifications/NotificationsPage'));
 const UsersPage = lazyWithRetry(() => import('@/features/users/UsersPage'));
 const AuditLogPage = lazyWithRetry(() => import('@/features/audit/AuditLogPage'));
@@ -78,6 +80,8 @@ const invoicesRoute = createRoute({ getParentRoute: () => authLayoutRoute, path:
 const invoiceDetailRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/invoices/$id', component: InvoiceDetailPage });
 const debtorsRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/debtors', component: DebtorsPage });
 const debtorDetailRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/debtors/$id', component: DebtorDetailPage });
+const ledgerRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/ledger', component: LedgerPage });
+const ledgerDetailRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/ledger/$id', component: LedgerDetailPage });
 const notificationsRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/notifications', component: NotificationsPage });
 const usersRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/users', beforeLoad: requireAdmin, component: UsersPage });
 const auditLogRoute = createRoute({ getParentRoute: () => authLayoutRoute, path: '/audit-logs', beforeLoad: requireAdmin, component: AuditLogPage });
@@ -93,6 +97,8 @@ const routeTree = rootRoute.addChildren([
     invoiceDetailRoute,
     debtorsRoute,
     debtorDetailRoute,
+    ledgerRoute,
+    ledgerDetailRoute,
     notificationsRoute,
     usersRoute,
     auditLogRoute,

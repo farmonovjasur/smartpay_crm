@@ -3,7 +3,7 @@ import { Outlet, Link, useMatchRoute, useRouterState } from '@tanstack/react-rou
 import { useSelector, useDispatch } from 'react-redux';
 import {
   LayoutDashboard, Users, FileText, TriangleAlert, UserCog, LogOut,
-  Moon, Sun, Bell, ChevronLeft, ChevronRight, Crown, Menu, X, ScrollText,
+  Moon, Sun, Bell, ChevronLeft, ChevronRight, Crown, Menu, X, ScrollText, BookOpen
 } from 'lucide-react';
 import { useAuth, useLogout } from '@/features/auth/hooks';
 import { toggleSidebar, setMobileMenuOpen } from '@/store/uiSlice';
@@ -20,6 +20,7 @@ function useNavItems() {
     { to: '/clients', label: t('nav.clients'), icon: Users },
     { to: '/invoices', label: t('nav.invoices'), icon: FileText },
     { to: '/debtors', label: t('nav.debtors'), icon: TriangleAlert },
+    { to: '/ledger', label: t('nav.ledger'), icon: BookOpen },
   ];
 }
 
@@ -38,6 +39,7 @@ function useRouteMeta(pathname) {
     '/clients': { title: t('routeMeta.clients.title'), crumb: t('routeMeta.clients.crumb') },
     '/invoices': { title: t('routeMeta.invoices.title'), crumb: t('routeMeta.invoices.crumb') },
     '/debtors': { title: t('routeMeta.debtors.title'), crumb: t('routeMeta.debtors.crumb') },
+    '/ledger': { title: t('routeMeta.ledger.title'), crumb: t('routeMeta.ledger.crumb') },
     '/notifications': { title: t('routeMeta.notifications.title'), crumb: t('routeMeta.notifications.crumb') },
     '/users': { title: t('routeMeta.users.title'), crumb: t('routeMeta.users.crumb') },
     '/audit-logs': { title: t('routeMeta.auditLogs.title'), crumb: t('routeMeta.auditLogs.crumb') },

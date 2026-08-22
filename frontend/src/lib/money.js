@@ -11,6 +11,9 @@ export function formatMoney(decimalString) {
   const sign = intPart.startsWith('-') ? '-' : '';
   const digits = sign ? intPart.slice(1) : intPart;
   const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  const result = fracPart !== undefined ? `${grouped}.${fracPart}` : grouped;
+  let result = grouped;
+  if (fracPart !== undefined && !/^0+$/.test(fracPart)) {
+    result += `.${fracPart}`;
+  }
   return sign + result;
 }
